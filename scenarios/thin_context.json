@@ -1,0 +1,18 @@
+{
+  "condition": "thin_context",
+  "spec_completeness": 0.35,
+  "wall_clock_s": 96.0,
+  "solution_file": ".solution/redact_fixed.py",
+  "turns": [
+    {"cost_usd": 0.05, "tool_calls": 1, "event": "progress",
+     "note": "Vague one-line spec ('remove personal info'); guessed it meant emails only."},
+    {"cost_usd": 0.06, "tool_calls": 2, "event": "progress",
+     "note": "Implemented naive str.replace for a single email address."},
+    {"cost_usd": 0.07, "tool_calls": 2, "event": "rework",
+     "note": "Tests failed: phones unmasked, multiple/other emails missed. Re-read failures."},
+    {"cost_usd": 0.07, "tool_calls": 2, "event": "progress",
+     "note": "Switched to regex; added phone handling (dashed + bare)."},
+    {"cost_usd": 0.06, "tool_calls": 1, "event": "converged",
+     "note": "Ran tests: 7/7 pass."}
+  ]
+}

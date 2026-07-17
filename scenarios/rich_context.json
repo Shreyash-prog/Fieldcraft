@@ -1,0 +1,12 @@
+{
+  "condition": "rich_context",
+  "spec_completeness": 0.9,
+  "wall_clock_s": 41.0,
+  "solution_file": ".solution/redact_fixed.py",
+  "turns": [
+    {"cost_usd": 0.07, "tool_calls": 2, "event": "progress",
+     "note": "Read ticket + tests + Field Guide note on PII patterns; wrote regex-based redact_pii covering emails and phones."},
+    {"cost_usd": 0.07, "tool_calls": 1, "event": "converged",
+     "note": "Ran tests: 7/7 pass."}
+  ]
+}

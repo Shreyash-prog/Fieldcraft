@@ -1,0 +1,6 @@
+[
+  {"id": "AC1", "text": "Emails masked", "probe": {"func": "redact_pii", "args": ["ada@example.com"], "contains": "[EMAIL]"}},
+  {"id": "AC2", "text": "Phones masked", "probe": {"func": "redact_pii", "args": ["415-555-2671"], "contains": "[PHONE]"}},
+  {"id": "AC3", "text": "Plain text preserved", "probe": {"func": "redact_pii", "args": ["hello world"], "equals": "hello world"}},
+  {"id": "AC4", "text": "Idempotent", "probe": {"func": "redact_pii", "args": ["ada@example.com 415-555-2671"], "idempotent": true}}
+]
