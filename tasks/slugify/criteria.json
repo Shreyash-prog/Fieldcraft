@@ -1,0 +1,6 @@
+[
+ {"id":"SC1","text":"Lowercases and hyphenates words","probe":{"func":"slugify","args":["Hello World"],"equals":"hello-world"}},
+ {"id":"SC2","text":"Strips punctuation to hyphens","probe":{"func":"slugify","args":["Foo!!Bar"],"equals":"foo-bar"}},
+ {"id":"SC3","text":"Trims leading/trailing separators","probe":{"func":"slugify","args":["--Trim--"],"equals":"trim"}},
+ {"id":"SC4","text":"Collapses repeated separators","probe":{"func":"slugify","args":["Multiple   Spaces"],"equals":"multiple-spaces"}}
+]

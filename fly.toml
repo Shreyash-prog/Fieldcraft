@@ -1,0 +1,32 @@
+# Fieldcraft POC — Fly.io deployment
+app = "fieldcraft-poc"
+primary_region = "iad"
+
+[build]
+
+[env]
+  FC_ALLOW_LIVE = "0"          # flip to "1" AND set ANTHROPIC_API_KEY to enable live agent/judge
+  FC_BRIEFS_PER_HOUR = "10"
+  FC_MAX_CONCURRENT = "4"
+  FC_DAILY_COST_CAP_USD = "5"
+  FC_MAX_BUDGET_PER_RUN_USD = "1"
+  FC_PYTEST_TIMEOUT_S = "30"
+  FC_DATA_DIR = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "4s"
+    method = "GET"
+    path = "/healthz"
+
+# durable SQLite (event + brief history) survives restarts
+[[mounts]]
+  source = "fieldcraft_data"
+  destination = "/data"

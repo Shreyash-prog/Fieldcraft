@@ -1,0 +1,3 @@
+{"name":"slugify","module":"slugify","target_file":"slugify.py","test_file":"test_slugify.py",
+ "criteria_file":"criteria.json","stages":[".stages/stage1.py"],"solution":".solution/full.py",
+ "trap_keywords":["collapse","strip","separator"]}

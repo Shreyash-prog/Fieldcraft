@@ -1,0 +1,3 @@
+{"name":"redact_pii","module":"redact","target_file":"redact.py","test_file":"test_redact.py",
+ "criteria_file":"criteria.json","stages":[".stages/stage1_emails.py"],
+ "solution":".solution/redact_fixed.py","trap_keywords":["phone","bare","dashed"]}

@@ -1,79 +1,45 @@
 # Fieldcraft
 
-**Measuring how effectively people deliver with AI.**
+**Run AI coding agents through a governed develop→verify→iterate loop, and measure how effectively the human+AI actually delivered.**
 
-Coding agents made *building* cheap. What almost nobody measures is the *delivery*: when an engineer works a task with an AI agent, did they ship faster, cheaper, and better — and where is the improvable gap? Agent-reliability tooling grades the *agent*. Fieldcraft grades the *human + AI loop*.
+Coding agents made *building* cheap. What's still hard is directing them safely and knowing whether the delivery was good — faster, cheaper, correct — and where the improvable gap is. Fieldcraft is the orchestration + measurement layer for that: a governed loop with human-in-the-loop review, a calibrated evaluation layer, per-codebase context, and a measurement science that reports effects **with honest uncertainty**.
 
-This repo is two things, in order of importance:
-
-- **A working v0 (`fieldcraft_aar/`)** — a small, runnable harness that instruments an AI-assisted coding task and emits an After-Action Review: effectiveness, efficiency, and how well the operator drove the agent.
-- **A design exploration (`docs/architecture.md`)** — the larger system this measurement layer belongs to.
-
----
-
-## Run it — 30 seconds, no credentials
+Everything here is runnable. The offline paths need no API key.
 
 ```bash
 pip install -r requirements.txt
-python -m fieldcraft_aar --adapter mock
-# → out/aar.json and a self-contained out/aar_report.html
+python -m fieldcraft_loop            # watch the governed loop converge (mock agent)
+python -m fieldcraft_bench           # the multi-task benchmark + dashboard
+python -m fieldcraft_measure         # the measurement report (with uncertainty)
+python -m uvicorn fieldcraft_web.server:app --port 8000   # the web POC -> http://127.0.0.1:8000
 ```
 
-![After-Action Review report](assets/aar_report.png)
+## The pieces
 
-The demo runs the same task two ways — a rich-context run and a thin-context run. Both reach **identical effectiveness** (all tests pass, all acceptance criteria met), but one costs **2.2× the other**, with the gap attributed to input context quality. That delta is invisible to agent-reliability scoring, and it is the whole point.
-
-Effectiveness is **real** — the harness actually runs the task's `pytest` suite and probes the resulting code against each acceptance criterion. Only the run *trace* (cost/turns) is replayed in mock mode.
-
----
-
-## What it measures
-
-| Family | Answers | Signals |
+| Package | What it is | Try it |
 |---|---|---|
-| **Effectiveness** | Was the outcome good? | tests passing, acceptance criteria met, composite score |
-| **Efficiency** | What did it cost? | cost (USD), turns, tool calls, wall-clock |
-| **AI-usage quality** | How well did the operator drive the AI? | turns-to-converge, rework turns, directive efficiency, input spec completeness |
+| `fieldcraft_aar/` | **Measurement harness** — instruments one AI-assisted run: effectiveness (real tests + acceptance grading), efficiency (cost, turns), operator quality. Hybrid heuristic + LLM-as-judge (Claude forced tool-use). Judge **calibration** (agreement + Cohen's kappa). | `python -m fieldcraft_aar --adapter mock` / `python -m fieldcraft_aar.calibration` |
+| `fieldcraft_loop/` | **Governed loop** — an event-sourced state machine driving develop→verify→iterate, with a Turn Assembler, budget/iteration circuit breakers, human-in-the-loop review, and a **resumable Engine** whose state survives restarts. Mock, guided, and live (Claude Code) agents behind one interface. | `python -m fieldcraft_loop [--adapter mock\|claude] [--grader behavioral\|tooluse] [--review auto\|human]` |
+| `fieldcraft_guide/` | **Field Guide** — bootstrap any repo into per-codebase context (module map, conventions, traps, retrieval); measurably cuts iterations-to-converge. | `python -m fieldcraft_guide bootstrap <repo>` / `python -m fieldcraft_guide.impact` |
+| `fieldcraft_bench/` | **Multi-task benchmark** — runs the suite blind vs Field-Guide-guided and renders a cross-run dashboard. | `python -m fieldcraft_bench` |
+| `fieldcraft_measure/` | **Measurement science** — difficulty-normalized efficiency, a validity gate (integrity), aggregate effects with **bootstrap CIs + a sign test**, reporting power honestly. | `python -m fieldcraft_measure` |
+| `fieldcraft_web/` | **POC** — FastAPI + single-page UI over the resumable engine; human review in the browser. Hardened for deploy (rate limits, spend caps, sandboxed execution, health check). | `uvicorn fieldcraft_web.server:app` |
 
-Efficiency is compared **only at constant effectiveness** — "used less" counts as better *only when the outcome is held equal*, never for cutting corners.
+## Design notes
 
----
+- **Event-sourced.** Every transition is an append-only event (SQLite). The run *is* the log — auditable, replayable, resumable, and the measurement layer derives from it rather than needing separate instrumentation.
+- **Model-agnostic seam.** Agents (mock / guided / live Claude Code) and judges (behavioral / Claude forced tool-use) are swappable; the controller and engine don't change.
+- **Honest by construction.** Effectiveness is invalid if the agent tampers with tests; efficiency is compared only at constant effectiveness; the measurement layer reports uncertainty and refuses to overclaim at small N.
 
-## Live mode
+## Tasks & tools
 
-```bash
-python -m fieldcraft_aar --adapter claude --grader claude --conditions rich_context
-```
+- `sample_task/`, `tasks/` — self-contained coding tasks (stub, tests, acceptance criteria, staged + full solutions, curated traps, manifest).
+- `tools/` — fixture generator, a contract-conformant fake Claude CLI, and the offline robustness + stats checks (`python tools/live_robustness_check.py`, `python tools/measure_stats_check.py`).
 
-Runs a real Claude Code session (`claude -p --output-format json`) in a fresh workdir and parses its cost/turns. The `RunAdapter` seam is the design: the metrics are **model- and framework-agnostic** — point it at any agent that edits a repo, and the measurement layer doesn't care which model produced the work.
+## Running live / deploying
 
----
+`LIVE.md` covers running against the real `claude` CLI; `DEPLOY.md` covers containerizing and deploying the POC. Live runs need `ANTHROPIC_API_KEY` / an authenticated CLI.
 
-## Layout
+## Status
 
-```
-fieldcraft_aar/      the harness: adapters · effectiveness · telemetry · aar · report
-sample_task/         a small PII-redaction task (stub, tests, criteria, reference solution)
-scenarios/           recorded run traces for offline mock mode
-docs/architecture.md the broader design this slice belongs to
-```
-
----
-
-## The bigger picture
-
-This harness is one layer of a larger design for AI-assisted forward-deployed engineering — trust boundary, execution model, verification, governance, and this measurement layer. That design lives in [`docs/architecture.md`](docs/architecture.md), written as an exploration.
-
-To be clear about status: **the measurement slice in this repo runs; the full architecture is a design, not a shipped system.** The interesting, differentiated, and *built* part is the measurement of human + AI delivery.
-
----
-
-## Status & limits
-
-- **v0.** The mock scenarios are illustrative traces; live mode produces real numbers.
-- **Fair cross-operator comparison needs N.** Difficulty-adjusting real, different tasks to isolate operator skill improves with data — it is a direction, not a solved ranking engine. Standardized benchmark tasks (like the sample) give clean apples-to-apples soonest.
-- Effectiveness rests on test quality — passing tests narrow the correctness gap, they don't close it.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+A working system and design exploration, not a shipped product. The loop, evaluation, Field Guide, benchmark, measurement, and web POC are real and tested.

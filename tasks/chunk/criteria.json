@@ -1,0 +1,6 @@
+[
+ {"id":"CK1","text":"Even split","probe":{"func":"chunk","args":[[1,2,3,4],2],"equals":[[1,2],[3,4]]}},
+ {"id":"CK2","text":"Keeps smaller last chunk","probe":{"func":"chunk","args":[[1,2,3,4,5],2],"equals":[[1,2],[3,4],[5]]}},
+ {"id":"CK3","text":"Empty list","probe":{"func":"chunk","args":[[],3],"equals":[]}},
+ {"id":"CK4","text":"n<1 raises ValueError","probe":{"func":"chunk","args":[[1],0],"raises":"ValueError"}}
+]

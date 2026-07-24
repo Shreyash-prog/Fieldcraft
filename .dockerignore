@@ -1,9 +1,9 @@
 __pycache__/
 *.pyc
 out/
-*.db
-*.db-wal
-*.db-shm
 .venv/
+.git/
 .DS_Store
-node_modules/
+tools/
+docs/
+*.md

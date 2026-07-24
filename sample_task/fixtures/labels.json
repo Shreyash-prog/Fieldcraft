@@ -1,0 +1,568 @@
+{
+  "fixtures": [
+    {
+      "file": "gen_001.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "correct",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_002.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "correct",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_003.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "correct",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_004.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "correct",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_005.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "dashed",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_006.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "dashed",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_007.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "dashed",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_008.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "dashed",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_009.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "none",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_010.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "none",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_011.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "none",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_012.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "A",
+        "phone": "none",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_013.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "correct",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_014.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "correct",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_015.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "correct",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_016.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "correct",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_017.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "dashed",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_018.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "dashed",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_019.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "dashed",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_020.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "dashed",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_021.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "none",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_022.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "none",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_023.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "none",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_024.py",
+      "labels": {
+        "AC1": "met",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "B",
+        "phone": "none",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_025.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "correct",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_026.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "correct",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_027.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "correct",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_028.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "correct",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_029.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "dashed",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_030.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "dashed",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_031.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "dashed",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_032.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "met",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "dashed",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_033.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "unmet",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "none",
+        "mangle": 0,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_034.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "none",
+        "mangle": 0,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "gen_035.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "none",
+        "mangle": 1,
+        "break_idem": 0
+      }
+    },
+    {
+      "file": "gen_036.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "unmet"
+      },
+      "meta": {
+        "email": "none",
+        "phone": "none",
+        "mangle": 1,
+        "break_idem": 1
+      }
+    },
+    {
+      "file": "stub.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "unmet",
+        "AC3": "met",
+        "AC4": "met"
+      },
+      "meta": {
+        "special": "stub.py"
+      }
+    },
+    {
+      "file": "empty_out.py",
+      "labels": {
+        "AC1": "unmet",
+        "AC2": "unmet",
+        "AC3": "unmet",
+        "AC4": "met"
+      },
+      "meta": {
+        "special": "empty_out.py"
+      }
+    }
+  ]
+}

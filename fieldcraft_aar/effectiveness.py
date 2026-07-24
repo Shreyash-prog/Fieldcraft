@@ -21,13 +21,21 @@ from .models import Effectiveness, CriterionVerdict
 # Authoritative test run (real)
 # ----------------------------------------------------------------------------
 def run_pytest(workdir: Path) -> tuple[int, int, bool]:
-    """Run pytest in workdir. Returns (passed, total, all_pass)."""
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "--tb=no", "-p", "no:cacheprovider"],
-        cwd=str(workdir),
-        capture_output=True,
-        text=True,
-    )
+    """Run pytest in workdir. Returns (passed, total, all_pass).
+
+    Bounded by FC_PYTEST_TIMEOUT_S so agent-written code can't hang the process;
+    a timeout counts as a failed verification, not a crash."""
+    timeout = int(os.environ.get("FC_PYTEST_TIMEOUT_S", "60"))
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", "-q", "--tb=no", "-p", "no:cacheprovider"],
+            cwd=str(workdir),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return 0, 0, False
     out = proc.stdout + proc.stderr
     passed = _count(out, r"(\d+)\s+passed")
     failed = _count(out, r"(\d+)\s+failed")
@@ -46,21 +54,23 @@ def _count(text: str, pattern: str) -> int:
 # Acceptance grading (pluggable)
 # ----------------------------------------------------------------------------
 class Grader:
-    def grade(self, workdir: Path, criteria: list[dict], diff: str) -> list[CriterionVerdict]:
+    def grade(self, workdir: Path, criteria: list[dict], diff: str,
+              module: str = "redact") -> list[CriterionVerdict]:
         raise NotImplementedError
 
 
 class BehavioralGrader(Grader):
     """Deterministic, offline. Each criterion carries a `probe`: a tiny callable
-    spec (input -> expected substring / equality) evaluated against the candidate
-    module. This is a real functional check, not "tests passed => all met"."""
+    spec (input -> expected substring / equality / raises) evaluated against the
+    candidate module. A real functional check, not "tests passed => all met"."""
 
-    def grade(self, workdir: Path, criteria: list[dict], diff: str) -> list[CriterionVerdict]:
-        module = _load_candidate(workdir, "redact")
+    def grade(self, workdir: Path, criteria: list[dict], diff: str,
+              module: str = "redact") -> list[CriterionVerdict]:
+        mod = _load_candidate(workdir, module)
         verdicts: list[CriterionVerdict] = []
         for c in criteria:
             try:
-                ok, why = _probe(module, c["probe"])
+                ok, why = _probe(mod, c["probe"])
                 verdicts.append(CriterionVerdict(
                     id=c["id"], text=c["text"],
                     verdict="met" if ok else "unmet", rationale=why,
@@ -81,7 +91,8 @@ class ClaudeGrader(Grader):
     def __init__(self, model: str = "claude-sonnet-4-6"):
         self.model = model
 
-    def grade(self, workdir: Path, criteria: list[dict], diff: str) -> list[CriterionVerdict]:
+    def grade(self, workdir: Path, criteria: list[dict], diff: str,
+              module: str = "redact") -> list[CriterionVerdict]:
         import urllib.request
 
         key = os.environ.get("ANTHROPIC_API_KEY")
@@ -127,9 +138,19 @@ def _load_candidate(workdir: Path, module_name: str):
 
 
 def _probe(module, probe: dict) -> tuple[bool, str]:
-    """probe = {func, args, contains|equals|idempotent}."""
+    """probe = {func, args, contains|equals|idempotent|raises}."""
     fn = getattr(module, probe["func"])
     args = probe.get("args", [])
+    if "raises" in probe:
+        import builtins
+        exc = getattr(builtins, probe["raises"], Exception)
+        try:
+            fn(*args)
+            return False, f"expected {probe['raises']}, none raised"
+        except exc:
+            return True, f"raised {probe['raises']} as expected"
+        except Exception as e:  # noqa: BLE001
+            return False, f"raised {type(e).__name__}, expected {probe['raises']}"
     result = fn(*args)
     if "contains" in probe:
         ok = probe["contains"] in result
@@ -147,9 +168,10 @@ def _probe(module, probe: dict) -> tuple[bool, str]:
 # ----------------------------------------------------------------------------
 # Compose
 # ----------------------------------------------------------------------------
-def compute_effectiveness(workdir: Path, criteria: list[dict], diff: str, grader: Grader) -> Effectiveness:
+def compute_effectiveness(workdir: Path, criteria: list[dict], diff: str, grader: Grader,
+                          module: str = "redact") -> Effectiveness:
     passed, total, all_pass = run_pytest(workdir)
-    verdicts = grader.grade(workdir, criteria, diff)
+    verdicts = grader.grade(workdir, criteria, diff, module)
     test_rate = (passed / total) if total else 0.0
     crit_rate = (sum(1 for v in verdicts if v.verdict == "met") / len(verdicts)) if verdicts else 0.0
     score = round(0.5 * test_rate + 0.5 * crit_rate, 3)

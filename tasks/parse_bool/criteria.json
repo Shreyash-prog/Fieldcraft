@@ -1,0 +1,6 @@
+[
+ {"id":"PB1","text":"Case-insensitive truthy","probe":{"func":"parse_bool","args":["Yes"],"equals":true}},
+ {"id":"PB2","text":"Whitespace trimmed","probe":{"func":"parse_bool","args":[" no "],"equals":false}},
+ {"id":"PB3","text":"Numeric and on/off forms","probe":{"func":"parse_bool","args":["1"],"equals":true}},
+ {"id":"PB4","text":"Unknown input raises ValueError","probe":{"func":"parse_bool","args":["maybe"],"raises":"ValueError"}}
+]

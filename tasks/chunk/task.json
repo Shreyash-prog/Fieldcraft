@@ -1,0 +1,3 @@
+{"name":"chunk","module":"chunk","target_file":"chunk.py","test_file":"test_chunk.py",
+ "criteria_file":"criteria.json","stages":[".stages/stage1.py"],"solution":".solution/full.py",
+ "trap_keywords":["remainder","valueerror"]}

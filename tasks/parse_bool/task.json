@@ -1,0 +1,3 @@
+{"name":"parse_bool","module":"parse_bool","target_file":"parse_bool.py","test_file":"test_parse_bool.py",
+ "criteria_file":"criteria.json","stages":[".stages/stage1.py"],"solution":".solution/full.py",
+ "trap_keywords":["valueerror","case-insensitive"]}

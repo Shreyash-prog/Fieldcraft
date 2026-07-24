@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldcraft — AI-assisted delivery, measured</title>
+<style>
+  :root{
+    --ink:#16202b; --mut:#5a6b78; --line:#dde3e8; --bg:#f6f7f9; --card:#fff;
+    --teal:#0c6d5e; --amber:#9c5a1e; --red:#b3261e; --chip:#eef1f3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  header{padding:22px 28px;border-bottom:1px solid var(--line);background:#fff;
+    display:flex;align-items:baseline;gap:14px}
+  header h1{font-size:19px;margin:0;letter-spacing:-.01em}
+  header .tag{color:var(--mut);font-size:13px}
+  .wrap{max-width:940px;margin:0 auto;padding:24px 20px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-bottom:16px}
+  .fam{font:600 10px ui-monospace,monospace;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--mut);margin:0 0 10px}
+  label{display:block;font-size:12px;color:var(--mut);margin:0 0 4px}
+  select,input[type=number],textarea{width:100%;padding:8px 10px;border:1px solid var(--line);
+    border-radius:8px;font:14px ui-sans-serif,system-ui;background:#fff;color:var(--ink)}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+  button{font:600 14px ui-sans-serif,system-ui;border:0;border-radius:9px;padding:10px 16px;
+    cursor:pointer;color:#fff;background:var(--ink)}
+  button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  button.go{background:var(--teal)} button.warn{background:var(--amber)} button.stop{background:var(--red)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .pill{display:inline-block;font:600 11px ui-monospace,monospace;padding:3px 9px;border-radius:20px;
+    background:var(--chip);color:var(--mut)}
+  .pill.run{background:#e7f3f1;color:var(--teal)} .pill.rev{background:#fbf0e2;color:var(--amber)}
+  .pill.done{background:#e7f3f1;color:var(--teal)} .pill.stop{background:#fbe9e7;color:var(--red)}
+  .turn{border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+  .turn h3{margin:0;padding:9px 14px;background:#fbfcfd;border-bottom:1px solid var(--line);
+    font:600 12px ui-monospace,monospace;color:var(--mut);letter-spacing:.04em}
+  .turn .body{padding:12px 14px}
+  pre.diff{margin:0 0 10px;padding:10px;background:#0f1720;border-radius:8px;overflow:auto;
+    font:12.5px/1.5 ui-monospace,monospace;color:#c7d0d9;max-height:230px}
+  pre.diff .add{color:#7ee3c7} pre.diff .del{color:#f0a8a2} pre.diff .hd{color:#7aa2c2}
+  .crit{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13.5px}
+  .mark{font:700 11px ui-monospace,monospace;padding:1px 6px;border-radius:5px;margin-top:1px}
+  .mark.pass{background:#e7f3f1;color:var(--teal)} .mark.fail{background:#fbe9e7;color:var(--red)}
+  .crit .ev{color:var(--mut);font-family:ui-monospace,monospace;font-size:12px}
+  .review{border:2px solid var(--amber)}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px}
+  .metric .n{font:700 22px ui-monospace,monospace} .metric .l{font-size:12px;color:var(--mut)}
+  .muted{color:var(--mut)} .hide{display:none}
+  .traj{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Fieldcraft</h1>
+  <span class="tag">AI-assisted delivery, governed and measured</span>
+</header>
+
+<div class="wrap">
+
+  <div class="card" id="createCard">
+    <p class="fam">New brief</p>
+    <p class="muted" style="margin-top:0">Task: implement <span class="mono">redact_pii</span> to pass its tests and acceptance criteria. Watch the agent work it, step in as reviewer, and see the run scored.</p>
+    <div class="row">
+      <div><label>Agent</label>
+        <select id="adapter"><option value="mock">mock (offline)</option><option value="claude">claude (live)</option></select></div>
+      <div><label>Judge</label>
+        <select id="grader"><option value="behavioral">behavioral</option><option value="tooluse">tool-use (Claude)</option></select></div>
+      <div><label>Review</label>
+        <select id="review"><option value="human">human-in-the-loop</option><option value="auto">auto</option></select></div>
+      <div><label>Max iterations</label><input id="maxit" type="number" value="5" min="1" max="10"></div>
+      <div><label>Budget ($)</label><input id="budget" type="number" value="2" min="0.1" step="0.1"></div>
+    </div>
+    <div style="margin-top:14px"><button class="go" id="startBtn" onclick="start()">Start run</button></div>
+  </div>
+
+  <div class="card hide" id="statusCard">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="mono" id="briefId"></span>
+      <span class="pill" id="statusPill">—</span>
+    </div>
+  </div>
+
+  <div class="card review hide" id="reviewCard">
+    <p class="fam">Your review · <span id="revTurn"></span></p>
+    <div id="revBody"></div>
+    <div style="margin-top:12px">
+      <label>Comment (for "request changes")</label>
+      <textarea id="comment" rows="2" placeholder="e.g. phone numbers are still unmasked — handle dashed and bare formats"></textarea>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="go" onclick="review('approve')">Approve</button>
+      <button class="warn" onclick="review('changes')">Request changes</button>
+      <button class="stop" onclick="review('reject')">Reject</button>
+    </div>
+  </div>
+
+  <div class="card hide" id="aarCard">
+    <p class="fam">After-Action Review</p>
+    <div class="metrics" id="aarMetrics"></div>
+    <div style="margin-top:16px"><div class="l muted">effectiveness trajectory</div><div class="traj" id="traj"></div></div>
+  </div>
+
+  <div id="feed"></div>
+
+</div>
+
+<script>
+let BID=null, timer=null;
+function el(id){return document.getElementById(id)}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+async function start(){
+  el('startBtn').disabled=true;
+  const body={adapter:el('adapter').value, grader:el('grader').value, review:el('review').value,
+              max_iterations:+el('maxit').value, budget:+el('budget').value};
+  const r=await fetch('/api/briefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json(); BID=d.brief_id;
+  el('createCard').classList.add('hide');
+  el('statusCard').classList.remove('hide');
+  el('briefId').textContent=BID;
+  timer=setInterval(poll,1000); poll();
+}
+function diffHtml(diff){
+  return (diff||'').split('\n').map(l=>{
+    let c=''; if(l.startsWith('+')&&!l.startsWith('+++'))c='add';
+    else if(l.startsWith('-')&&!l.startsWith('---'))c='del';
+    else if(l.startsWith('@@')||l.startsWith('+++')||l.startsWith('---'))c='hd';
+    return `<span class="${c}">${esc(l)}</span>`;
+  }).join('\n');
+}
+function critHtml(criteria){
+  return (criteria||[]).map(c=>{
+    const pass=c.verdict==='met';
+    return `<div class="crit"><span class="mark ${pass?'pass':'fail'}">${c.id} ${pass?'PASS':'FAIL'}</span>`+
+           `<span class="ev">${esc(c.evidence||'')}</span></div>`;
+  }).join('');
+}
+function setPill(status, awaiting){
+  const p=el('statusPill');
+  if(awaiting){p.className='pill rev';p.textContent='awaiting review';return}
+  const map={running:['run','running'],done:['done','done'],needs_human:['stop','needs human'],error:['stop','error']};
+  const v=map[status]||['','—']; p.className='pill '+v[0]; p.textContent=v[1];
+}
+function renderFeed(events){
+  const byTurn={};
+  events.forEach(e=>{ if(e.turn>0){(byTurn[e.turn]=byTurn[e.turn]||[]).push(e)} });
+  let html='';
+  Object.keys(byTurn).sort((a,b)=>a-b).forEach(t=>{
+    const evs=byTurn[t];
+    const turn=evs.find(e=>e.type==='turn_done');
+    const verdict=evs.find(e=>e.type==='verdict');
+    const chg=evs.find(e=>e.type==='changes_requested');
+    const hc=evs.find(e=>e.type==='human_comment');
+    const appr=evs.find(e=>e.type==='approved');
+    let b='';
+    if(turn) b+=`<p class="muted" style="margin:0 0 8px">${esc(turn.payload.note||'')} · $${turn.payload.cost_usd}</p>`;
+    if(verdict){
+      b+=`<div class="mono muted" style="margin-bottom:6px">score ${verdict.payload.score} · tests ${verdict.payload.tests} · criteria ${verdict.payload.criteria_met}/${verdict.payload.criteria_total}</div>`;
+      b+=critHtml(verdict.payload.criteria);
+    }
+    if(hc) b+=`<p style="margin:10px 0 0"><span class="mark" style="background:#eef1f3;color:#5a6b78">HUMAN</span> "${esc(hc.payload.comment)}"</p>`;
+    if(chg) b+=`<p class="muted mono" style="margin:8px 0 0">→ ${chg.payload.directives.length} directive(s) to next turn</p>`;
+    if(appr) b+=`<p style="margin:10px 0 0;color:var(--teal)">✓ approved by ${appr.payload.by}</p>`;
+    html+=`<div class="turn"><h3>iteration ${t}</h3><div class="body">${b}</div></div>`;
+  });
+  el('feed').innerHTML=html;
+}
+async function showReview(){
+  const r=await fetch(`/api/briefs/${BID}/pending`); const d=(await r.json()).pending;
+  if(!d){el('reviewCard').classList.add('hide');return}
+  el('revTurn').textContent='iteration '+d.turn;
+  el('revBody').innerHTML =
+    `<pre class="diff">${diffHtml(d.diff)}</pre>`+
+    `<div class="mono muted" style="margin-bottom:6px">score ${d.score} · tests ${d.tests}</div>`+
+    critHtml(d.criteria);
+  el('reviewCard').classList.remove('hide');
+}
+function renderAAR(aar){
+  if(!aar||aar.error)return;
+  const m=[['final_state',aar.final_state],['approved by',aar.approved_by||'—'],
+           ['iterations',aar.iterations],['cost','$'+aar.total_cost_usd],
+           ['converged @',aar.turns_to_converge==null?'—':aar.turns_to_converge],['rework',aar.rework_turns]];
+  el('aarMetrics').innerHTML=m.map(x=>`<div class="metric"><div class="n">${x[1]}</div><div class="l">${x[0]}</div></div>`).join('');
+  const tr=aar.effectiveness_trajectory||[];
+  el('traj').innerHTML=tr.map(s=>{
+    const h=Math.max(6,Math.round(s*54));
+    return `<div style="flex:1;text-align:center"><div style="background:var(--teal);height:${h}px;border-radius:3px"></div>`+
+           `<div class="mono" style="font-size:10px;color:var(--mut);margin-top:3px">${s}</div></div>`;
+  }).join('');
+  el('aarCard').classList.remove('hide');
+}
+async function poll(){
+  if(!BID)return;
+  const s=await (await fetch(`/api/briefs/${BID}`)).json();
+  setPill(s.status, s.awaiting_review);
+  const ev=(await (await fetch(`/api/briefs/${BID}/events`)).json()).events;
+  renderFeed(ev);
+  if(s.awaiting_review){ await showReview(); } else { el('reviewCard').classList.add('hide'); }
+  if(['done','needs_human','error'].includes(s.status)){ renderAAR(s.aar); clearInterval(timer); timer=null; }
+}
+async function review(kind){
+  await fetch(`/api/briefs/${BID}/review`,{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({kind,comment:el('comment').value})});
+  el('comment').value=''; el('reviewCard').classList.add('hide'); poll();
+}
+</script>
+</body>
+</html>
