@@ -35,7 +35,9 @@ from fieldcraft_loop.engine import Engine, TERMINAL
 from fieldcraft_loop.pdf_context import PdfContextError, PdfStore
 from fieldcraft_loop.ticket_store import STATUSES, TicketStore
 from . import auth as auth_mod
+from . import invite_store
 from .config import settings
+from .invite_store import InviteStore
 from .ledger import Ledger
 from .limits import Concurrency
 
@@ -67,6 +69,20 @@ ledger = Ledger(DATA / "ledger.db", global_cap=settings.daily_cost_cap_usd,
                 rate_per_hour=settings.briefs_per_hour)
 conc = Concurrency(settings.max_concurrent)
 auth = auth_mod.from_env(DATA)
+# Who may use this deployment, and who operates it. Codes from FC_INVITE_CODES /
+# FC_ADMIN_CODES are seeded as active invites so they keep working and become
+# manageable (and revocable) — seeding never resurrects a revoked row.
+invites = InviteStore(DATA / "invites.db")
+
+
+def seed_env_invites(a=None, store=None) -> None:
+    """Register every env-configured code as an active invite. Idempotent."""
+    a, store = a or auth, store or invites
+    for code, is_admin in a.env_invites():
+        store.seed(a.code_hash(code), a.user_id(code), None, is_admin)
+
+
+seed_env_invites()
 tickets = TicketStore(DATA / "tickets.db")
 # Ticket context (A2). Both are namespaced by user_id on disk, so one tenant's
 # clone or PDF is not merely hidden from another — it is in a different tree.
@@ -87,11 +103,47 @@ app.add_middleware(CORSMiddleware,
 
 
 def require_session(request: Request) -> str:
-    """The caller's tenant. 401 when auth is on and the cookie is missing/invalid;
-    the reserved 'legacy' tenant when auth is disabled."""
+    """The caller's tenant. 401 when auth is on and the cookie is missing/invalid
+    **or the invite behind it is no longer active**; the reserved 'legacy' tenant
+    when auth is disabled.
+
+    The invite is re-checked on every request, which is what makes revocation
+    immediate: a revoked code's outstanding session cookies stop working on the
+    next call rather than when they expire.
+    """
     uid = auth.current_user(request)
     if uid is None:
         raise auth_mod.unauthorized()
+    if auth.enabled:
+        inv = invites.by_user(uid)
+        if not inv or inv["status"] != invite_store.ACTIVE:
+            raise auth_mod.unauthorized()
+        invites.touch(uid)
+    return uid
+
+
+def require_admin(request: Request) -> str:
+    """The operator, or 404.
+
+    Being logged in is never enough: the session's invite row must exist, be
+    active, and carry is_admin. Three deliberate choices —
+
+    * **404, not 403.** A regular invited user should not learn that an admin
+      surface exists at all.
+    * **Disabled when auth is disabled.** With no codes configured every visitor
+      shares the `legacy` tenant, so there is no operator to distinguish and the
+      admin surface would be world-open. It fails closed instead.
+    * **No env-only shortcut.** Admin-ness is read from the store, so revoking an
+      admin invite removes admin access too.
+    """
+    if not auth.enabled:
+        raise HTTPException(404, "not found")
+    uid = auth.current_user(request)
+    if uid is None:
+        raise HTTPException(404, "not found")
+    inv = invites.by_user(uid)
+    if not inv or inv["status"] != invite_store.ACTIVE or not inv["is_admin"]:
+        raise HTTPException(404, "not found")
     return uid
 
 
@@ -186,12 +238,115 @@ def create_session(req: SessionReq, request: Request, response: Response):
         raise HTTPException(429, "too many attempts from your IP, try later")
     if not auth.enabled:
         return {"ok": True, "auth_enabled": False, "user": auth_mod.LEGACY_USER}
-    uid = auth.user_for_code(req.code[:200])
-    if not uid:
-        raise HTTPException(401, "invalid access code")     # never echo the code
+    code = req.code[:200]
+    # The invite row is the authority. An env-configured code that has not been
+    # seeded yet is seeded on first use, so FC_INVITE_CODES keeps working exactly
+    # as before while still becoming manageable — and revocable.
+    inv = invites.by_hash(auth.code_hash(code))
+    if inv is None:
+        uid = auth.user_for_code(code)                      # env code, first use
+        if not uid:
+            raise HTTPException(401, "invalid access code")  # never echo the code
+        invites.seed(auth.code_hash(code), uid, None, auth.is_admin_code(code))
+        inv = invites.by_hash(auth.code_hash(code))
+    if not inv or inv["status"] != invite_store.ACTIVE or not inv["user_id"]:
+        raise HTTPException(401, "invalid access code")
+    uid = inv["user_id"]
     response.set_cookie(auth_mod.COOKIE, auth.issue(uid), max_age=auth.ttl_s,
                         httponly=True, samesite="lax", secure=auth_mod.secure_cookie(request))
-    return {"ok": True, "auth_enabled": True, "user": uid}
+    return {"ok": True, "auth_enabled": True, "user": uid, "is_admin": inv["is_admin"]}
+
+
+@app.get("/api/me")
+def whoami(request: Request):
+    """Who the caller is, for the UI. Public: an anonymous caller gets
+    authenticated=false rather than a 401, so the shell can render the gate."""
+    uid = auth.current_user(request)
+    inv = invites.by_user(uid) if (uid and auth.enabled) else None
+    ok = bool(uid) and (not auth.enabled or (inv and inv["status"] == invite_store.ACTIVE))
+    return {"authenticated": bool(ok), "auth_enabled": auth.enabled,
+            "user": uid if ok else None,
+            "is_admin": bool(auth.enabled and ok and inv and inv["is_admin"])}
+
+
+# --- public access requests -------------------------------------------------
+# Records an ask. It never grants anything: the row has no code, and the operator
+# approves by hand in the admin view. Email delivery is MANUAL and out of band —
+# nothing here sends mail, on purpose (no SMTP dependency, no deliverability
+# surface). The operator reads the request and passes the code on however they like.
+
+class AccessRequest(BaseModel):
+    email: str
+
+
+@app.post("/api/access/request")
+def request_access(req: AccessRequest, request: Request):
+    """PUBLIC. Rate-limited per IP; cannot self-approve."""
+    if not ledger.hit("access:" + client_ip(request)):
+        raise HTTPException(429, "too many requests from your IP, try later")
+    if not invite_store.valid_email(req.email):
+        raise HTTPException(400, "that does not look like an email address")
+    invites.record_request(req.email)
+    # The same answer whatever the row's real state, so this cannot be used to
+    # probe who already has access.
+    return {"ok": True, "message": "Request received. Access is approved by hand — "
+                                   "if you're approved you'll get a code by email."}
+
+
+# --- operator-only invite administration ------------------------------------
+# Every route here depends on require_admin, which 404s for anyone who is not the
+# operator, including a perfectly valid invited user.
+
+class ApproveReq(BaseModel):
+    email: str
+    is_admin: bool = False
+
+
+class RevokeReq(BaseModel):
+    code: str | None = None
+    email: str | None = None
+
+
+def _invite_view(inv: dict) -> dict:
+    """One row for the admin table, with its spend. No code, ever."""
+    uid = inv.get("user_id") or ""
+    return {**inv,
+            "spent_today": ledger.spent_user(uid) if uid else 0.0,
+            "remaining_today": ledger.remaining_user(uid) if uid else None}
+
+
+@app.get("/api/admin/invites")
+def admin_list_invites(_: str = Depends(require_admin)):
+    # Report the caps the ledger actually enforces, not the ones settings was
+    # configured with — if those ever diverge, the enforced number is the truth.
+    return {"invites": [_invite_view(i) for i in invites.list_all()],
+            "caps": {"user_daily": ledger.user_cap,
+                     "global_daily": ledger.global_cap,
+                     "global_remaining": ledger.remaining_global()},
+            "statuses": list(invite_store.STATUSES)}
+
+
+@app.post("/api/admin/invites/approve")
+def admin_approve(req: ApproveReq, _: str = Depends(require_admin)):
+    """Generate a code and activate the invite. The plaintext code is returned
+    **once** — only its HMAC is stored, so it cannot be shown again."""
+    if not invite_store.valid_email(req.email):
+        raise HTTPException(400, "that does not look like an email address")
+    code = auth_mod.new_code()
+    inv = invites.approve(req.email, auth.code_hash(code), auth.user_id(code), req.is_admin)
+    return {"ok": True, "code": code, "invite": _invite_view(inv),
+            "note": "Copy this code now — it is stored hashed and cannot be shown again."}
+
+
+@app.post("/api/admin/invites/revoke")
+def admin_revoke(req: RevokeReq, _: str = Depends(require_admin)):
+    """Revoke by code or by email. Takes effect on the revoked user's next
+    request — require_session re-reads the invite every time."""
+    inv = invites.revoke(code_hash=auth.code_hash(req.code) if req.code else None,
+                         email=req.email)
+    if not inv:
+        raise HTTPException(404, "unknown invite")
+    return {"ok": True, "invite": _invite_view(inv)}
 
 
 @app.delete("/api/session")

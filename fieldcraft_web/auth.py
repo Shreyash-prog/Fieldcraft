@@ -64,10 +64,19 @@ def load_or_create_salt(data_dir: Path) -> bytes:
         return secrets.token_bytes(32)
 
 
+def new_code() -> str:
+    """A fresh invite code. `secrets` (CSPRNG), URL-safe, ~192 bits."""
+    return secrets.token_urlsafe(24)
+
+
 class Auth:
     def __init__(self, codes: str = "", secret: str = "", ttl_s: int = DEFAULT_TTL_S,
-                 salt: bytes | None = None):
-        self._codes = tuple(c.strip() for c in codes.split(",") if c.strip())
+                 salt: bytes | None = None, admin_codes: str = ""):
+        plain = tuple(c.strip() for c in codes.split(",") if c.strip())
+        self._admin_codes = tuple(c.strip() for c in admin_codes.split(",") if c.strip())
+        # An admin code is also a valid login code, so an operator does not have
+        # to remember to list the same secret in both variables.
+        self._codes = plain + tuple(c for c in self._admin_codes if c not in plain)
         self._salt = salt or secrets.token_bytes(32)
         self.ttl_s = ttl_s
         self._signer = URLSafeTimedSerializer(secret or secrets.token_urlsafe(32),
@@ -80,6 +89,13 @@ class Auth:
     def user_id(self, code: str) -> str:
         return "u-" + hmac.new(self._salt, code.encode(), hashlib.sha256).hexdigest()[:12]
 
+    def code_hash(self, code: str) -> str:
+        """Lookup key for a stored invite. Domain-separated from `user_id` so the
+        two derivations of the same code cannot be substituted for each other,
+        and full-length so it is a hash, not a truncation."""
+        return hmac.new(self._salt, b"invite:" + (code or "").encode(),
+                        hashlib.sha256).hexdigest()
+
     def user_for_code(self, code: str) -> str | None:
         """The tenant this code belongs to, or None. Constant-time and no early
         exit, so timing does not reveal which code matched."""
@@ -88,6 +104,19 @@ class Auth:
             if hmac.compare_digest(c, code or ""):
                 matched = c
         return self.user_id(matched) if matched else None
+
+    def is_admin_code(self, code: str) -> bool:
+        """Constant-time, no early exit — same discipline as user_for_code."""
+        found = False
+        for c in self._admin_codes:
+            if hmac.compare_digest(c, code or ""):
+                found = True
+        return found
+
+    def env_invites(self) -> tuple[tuple[str, bool], ...]:
+        """(code, is_admin) for every env-configured code, for seeding the invite
+        store at startup. In-process only — never log or serialise this."""
+        return tuple((c, self.is_admin_code(c)) for c in self._codes)
 
     def issue(self, user_id: str) -> str:
         return self._signer.dumps(user_id)
@@ -109,12 +138,13 @@ class Auth:
 
 def from_env(data_dir: Path) -> Auth:
     codes = os.environ.get("FC_INVITE_CODES", "")
+    admin_codes = os.environ.get("FC_ADMIN_CODES", "")
     secret = os.environ.get("FC_SECRET_KEY", "")
     try:
         ttl = int(os.environ.get("FC_SESSION_TTL_S", DEFAULT_TTL_S))
     except ValueError:
         ttl = DEFAULT_TTL_S
-    auth = Auth(codes, secret, ttl, load_or_create_salt(data_dir))
+    auth = Auth(codes, secret, ttl, load_or_create_salt(data_dir), admin_codes)
     if not auth.enabled:
         log.warning("AUTH DISABLED — FC_INVITE_CODES is unset, so every visitor shares the "
                     "'%s' tenant and can read every brief. Set FC_INVITE_CODES (and "

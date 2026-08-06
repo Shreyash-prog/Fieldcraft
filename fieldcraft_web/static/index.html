@@ -15,6 +15,9 @@
       <button id="n-run" onclick="nav('run')"><span class="dot"></span>Run a task</button>
       <button id="n-history" onclick="nav('history')"><span class="dot"></span>History</button>
       <button id="n-reports" onclick="nav('reports')"><span class="dot"></span>Reports</button>
+      <!-- operator only: revealed by /api/me, and the routes behind it 404 for
+           everyone else, so hiding it is convenience, not the control. -->
+      <button id="n-admin" class="hide" onclick="nav('admin')"><span class="dot"></span>Invites</button>
     </div>
     <div class="side-foot">AI-assisted delivery,<br>governed &amp; measured.</div>
   </aside>
@@ -143,6 +146,22 @@
       </div>
       <div id="reportBody"></div>
     </section>
+
+    <!-- ADMIN (operator only) -->
+    <section id="v-admin" class="hide">
+      <h1 class="head">Invites</h1>
+      <p class="sub">Who can use this deployment. Approving generates a code once — copy it and
+         send it to the person yourself; nothing here sends email.</p>
+      <div class="card">
+        <div class="ctx-row">
+          <input id="invEmail" type="email" placeholder="person@example.com" autocomplete="off">
+          <button class="act go" id="invApprove" style="white-space:nowrap">Approve &amp; issue code</button>
+        </div>
+        <p id="invMsg" style="font-size:12.5px;min-height:16px;margin:9px 0 0"></p>
+        <div id="invCode"></div>
+      </div>
+      <div class="card"><div id="invBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
+    </section>
   </main>
 </div>
 <script>
@@ -166,12 +185,43 @@ function showGate(msg){
     'Enter the code you were given.</p>'+
     '<input id="gateCode" type="password" placeholder="access code">'+
     '<p class="muted" id="gateMsg" style="font-size:12px;min-height:16px;margin:6px 0"></p>'+
-    '<button class="act go" id="gateBtn">Enter</button></div>';
+    '<button class="act go" id="gateBtn">Enter</button>'+
+    '<div class="gate-sep"></div>'+
+    '<button class="linkbtn" id="askToggle">Don’t have a code? Request access</button>'+
+    '<div id="askBox" class="hide">'+
+      '<p class="muted" style="font-size:12.5px;margin:10px 0 8px">Access is approved '+
+      'by hand, one person at a time. Leave your email and you’ll get a code if '+
+      'you’re approved — there is no automatic sign-up.</p>'+
+      '<input id="askEmail" type="email" placeholder="you@example.com" autocomplete="email">'+
+      '<p id="askMsg" style="font-size:12px;min-height:16px;margin:6px 0"></p>'+
+      '<button class="act ghost" id="askBtn">Request access</button></div></div>';
   document.body.appendChild(d);
   el('gateBtn').onclick=submitCode;
   el('gateCode').onkeydown=e=>{if(e.key==='Enter') submitCode();};
+  el('askToggle').onclick=()=>{
+    el('askBox').classList.toggle('hide');
+    if(!el('askBox').classList.contains('hide')) el('askEmail').focus();};
+  el('askBtn').onclick=requestAccess;
+  el('askEmail').onkeydown=e=>{if(e.key==='Enter') requestAccess();};
   el('gateCode').focus();
   if(msg) el('gateMsg').textContent=msg;
+}
+async function requestAccess(){
+  const email=(el('askEmail').value||'').trim();
+  const msg=el('askMsg'), btn=el('askBtn');
+  if(!email){ el('askEmail').focus(); return; }
+  btn.disabled=true; msg.className=''; msg.style.color='var(--mut)'; msg.textContent='sending…';
+  let r,d;
+  try{
+    r=await _fetch('/api/access/request',{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify({email})});
+    d=await r.json();
+  }catch(e){ btn.disabled=false; msg.style.color='var(--red)'; msg.textContent=''+e; return; }
+  if(!r.ok){ btn.disabled=false; msg.style.color='var(--red)';
+    msg.textContent=r.status===429?'too many requests — try again later'
+                                  :(d.detail||'could not send that request'); return; }
+  msg.style.color='var(--teal)'; msg.textContent='✓ '+d.message;
+  el('askEmail').disabled=true;
 }
 async function submitCode(){
   const code=el('gateCode').value;
@@ -183,13 +233,89 @@ async function submitCode(){
   el('gateMsg').textContent=r.status===429?'too many attempts — wait a bit':'invalid code';
 }
 
-const VIEWS=['board','overview','run','history','reports'];
+const VIEWS=['board','overview','run','history','reports','admin'];
 function nav(v){
   VIEWS.forEach(x=>{
     el('v-'+x).classList.toggle('hide', x!==v); el('n-'+x).classList.toggle('on', x===v);});
   el('main').classList.toggle('wide', v==='board');
   if(v==='history') loadHistory();
   if(v==='board') loadBoard();
+  if(v==='admin') loadInvites();
+}
+
+// ---------- operator-only invite admin ----------
+// The nav entry is hidden for non-operators purely so the UI isn't confusing.
+// The real control is server-side: every /api/admin route 404s for anyone whose
+// invite is not is_admin, so hiding the button is never what keeps anyone out.
+let IS_ADMIN=false;
+async function loadMe(){
+  const r=await _fetch('/api/me');            // bypass the 401 gate hook
+  if(!r.ok) return;
+  const me=await r.json();
+  IS_ADMIN=!!me.is_admin;
+  el('n-admin').classList.toggle('hide', !IS_ADMIN);
+}
+function invStatus(s){
+  const c={active:'done',requested:'rev',revoked:'stop'}[s]||'';
+  return `<span class="pill ${c}"><span class="dot"></span>${esc(s)}</span>`;
+}
+const ago=t=>{ if(!t) return '—';
+  const d=Math.floor(Date.now()/1000-t);
+  if(d<60) return 'just now'; if(d<3600) return Math.floor(d/60)+'m ago';
+  if(d<86400) return Math.floor(d/3600)+'h ago'; return Math.floor(d/86400)+'d ago'; };
+async function loadInvites(){
+  const r=await fetch('/api/admin/invites');
+  if(!r.ok){ el('invBody').innerHTML='<p class="muted">Not available.</p>'; return; }
+  const d=await r.json();
+  const rows=d.invites.map(i=>`<tr>
+      <td>${esc(i.email||'—')}${i.is_admin?' <span class="opbadge">operator</span>':''}</td>
+      <td>${invStatus(i.status)}</td>
+      <td>${ago(i.created_at)}</td>
+      <td>${ago(i.last_used_at)}</td>
+      <td>${i.user_id?('$'+Number(i.spent_today).toFixed(2)):'—'}</td>
+      <td>${i.remaining_today==null?'—':('$'+Number(i.remaining_today).toFixed(2))}</td>
+      <td style="text-align:right">${
+        i.status==='requested'
+          ? `<button class="act ghost sm" onclick="approveInvite('${esc(i.email)}')">Approve</button>`
+          : (i.status==='active' && i.email
+              ? `<button class="act stop sm" onclick="revokeInvite('${esc(i.email)}')">Revoke</button>`
+              : '')}</td></tr>`).join('');
+  el('invBody').innerHTML=
+    `<p class="fam">Invites · daily cap $${Number(d.caps.user_daily).toFixed(2)} per person ·
+       $${Number(d.caps.global_remaining).toFixed(2)} of $${Number(d.caps.global_daily).toFixed(2)} left today</p>
+     <table><tr><th>email</th><th>status</th><th>requested</th><th>last used</th>
+       <th>spent today</th><th>remaining</th><th></th></tr>${rows}</table>`;
+}
+async function approveInvite(email){
+  const target=email||(el('invEmail').value||'').trim();
+  const msg=el('invMsg');
+  if(!target){ el('invEmail').focus(); return; }
+  msg.style.color='var(--mut)'; msg.textContent='issuing…'; el('invCode').innerHTML='';
+  const r=await fetch('/api/admin/invites/approve',{method:'POST',
+    headers:{'content-type':'application/json'},body:JSON.stringify({email:target})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){ msg.style.color='var(--red)'; msg.textContent=d.detail||'could not approve'; return; }
+  msg.textContent='';
+  el('invCode').innerHTML=`<div class="codebox">
+      <div class="cl">Code for <b>${esc(target)}</b> — copy it now, it is stored hashed and
+        cannot be shown again. Send it to them yourself; nothing here emails.</div>
+      <div class="cv"><span class="mono" id="theCode">${esc(d.code)}</span>
+        <button class="act ghost sm" onclick="copyCode()">Copy</button></div></div>`;
+  el('invEmail').value='';
+  loadInvites();
+}
+function copyCode(){
+  const t=el('theCode').textContent;
+  navigator.clipboard?.writeText(t).then(()=>{
+    el('invMsg').style.color='var(--teal)'; el('invMsg').textContent='✓ copied';},
+    ()=>{ el('invMsg').style.color='var(--mut)'; el('invMsg').textContent='select and copy manually'; });
+}
+async function revokeInvite(email){
+  const r=await fetch('/api/admin/invites/revoke',{method:'POST',
+    headers:{'content-type':'application/json'},body:JSON.stringify({email})});
+  if(!r.ok){ el('invMsg').style.color='var(--red)'; el('invMsg').textContent='could not revoke'; return; }
+  el('invMsg').style.color='var(--mut)'; el('invMsg').textContent='revoked — their sessions stop working immediately';
+  loadInvites();
 }
 
 // ---------- board ----------
@@ -865,7 +991,10 @@ const RENDER={
     d.credential_checks.map(c=>`<div class="crit"><span class="mark ${c.allowed?'pass':'fail'}">${c.allowed?'ALLOW':'DENY'}</span><span class="ev2">${esc(c.cap)}</span></div>`).join('')+
     `<p class="muted" style="font-size:12px;margin-top:8px">audit entries: ${d.audit_entries}</p>`);}
 };
+el('invApprove').onclick=()=>approveInvite();
+el('invEmail').onkeydown=e=>{if(e.key==='Enter') approveInvite();};
 loadBoard();      // Board is the front door
 loadTasks();
+loadMe();         // reveals the operator-only nav, if this session is one
 </script>
 </body></html>
