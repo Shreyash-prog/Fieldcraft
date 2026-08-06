@@ -31,9 +31,16 @@ roles. See HARDENING.md P0-2 for the precise claim.
   session cookie (`itsdangerous`, expiring, `HttpOnly`/`SameSite=Lax`/`Secure` behind https);
   only the SPA shell, `/healthz`, and `POST /api/session` are public. Runs carry a `user_id`,
   and another tenant's brief returns **404** rather than 403 so existence never leaks.
+- **Durable spend + rate accounting** — `fieldcraft_web/ledger.py` keeps the daily spend
+  and the per-IP rate in SQLite on the data volume, so a restart or crash-loop **does not
+  reset the cap**. Every brief reserves its budget before it starts and settles to the
+  actual cost when it ends, with the check and the write in one `BEGIN IMMEDIATE`
+  transaction — parallel requests cannot oversell a cap. Single-node only: two instances
+  on separate volumes would each enforce their own cap (see HARDENING P0-4).
 - **Per-IP rate limiting** — `FC_BRIEFS_PER_HOUR` briefs per IP per rolling hour (429 over limit).
-- **Spend caps** — per-run budget clamp (`FC_MAX_BUDGET_PER_RUN_USD`) and a global
-  `FC_DAILY_COST_CAP_USD` that pauses live runs once hit.
+- **Spend caps** — per-run budget clamp (`FC_MAX_BUDGET_PER_RUN_USD`), a global
+  `FC_DAILY_COST_CAP_USD`, and a per-user `FC_USER_DAILY_COST_CAP_USD` so one tenant
+  cannot drain the day. A denial says which cap was hit.
 - **Concurrency limit** — `FC_MAX_CONCURRENT` simultaneous runs (503 over limit).
 - **Request clamps** — iterations/budget are clamped to safe bounds server-side.
 - **Hardened code execution** — every test/build command runs through the single
@@ -91,8 +98,10 @@ fly secrets set ANTHROPIC_API_KEY=sk-ant-...
 fly secrets set FC_ALLOW_LIVE=1
 ```
 
-Keep the caps conservative when live: `FC_DAILY_COST_CAP_USD` and
-`FC_MAX_BUDGET_PER_RUN_USD` are your blast-radius limits.
+Keep the caps conservative when live: `FC_DAILY_COST_CAP_USD`,
+`FC_USER_DAILY_COST_CAP_USD` and `FC_MAX_BUDGET_PER_RUN_USD` are your blast-radius
+limits, and they now survive a restart — a crash-loop no longer hands back a fresh
+daily budget.
 
 ## Portable to any container host
 
@@ -123,7 +132,8 @@ set the `FC_*` env vars.
 | `FC_ALLOW_LIVE` | `0` | enable claude/tool-use (needs `ANTHROPIC_API_KEY`) |
 | `FC_BRIEFS_PER_HOUR` | `10` | per-IP brief rate limit |
 | `FC_MAX_CONCURRENT` | `4` | simultaneous runs |
-| `FC_DAILY_COST_CAP_USD` | `5` | global daily live-spend ceiling |
+| `FC_DAILY_COST_CAP_USD` | `5` | global daily live-spend ceiling (durable, UTC day) |
+| `FC_USER_DAILY_COST_CAP_USD` | `1` | per-tenant slice of the daily ceiling |
 | `FC_MAX_BUDGET_PER_RUN_USD` | `1` | per-run budget clamp |
 | `FC_MAX_ITERATIONS` | `6` | per-run iteration clamp |
 | `FC_PYTEST_TIMEOUT_S` | `30` | test subprocess timeout |

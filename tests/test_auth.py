@@ -18,13 +18,6 @@ PROTECTED = [("get", "/api/tasks"), ("get", "/api/briefs"), ("get", "/api/report
              ("get", "/api/briefs/BRIEF-nope/pending")]
 
 
-@pytest.fixture(autouse=True)
-def relaxed_limits(monkeypatch):
-    """This module starts more briefs than the deployed per-IP/concurrency budget."""
-    monkeypatch.setattr(server, "rate", server.RateLimiter(per_hour=500))
-    monkeypatch.setattr(server, "conc", server.Concurrency(64))
-
-
 @pytest.fixture
 def secured(monkeypatch):
     """Turn auth on for this test with a fixed salt + signing key."""

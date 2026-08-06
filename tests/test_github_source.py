@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from fieldcraft_loop import github_source as gs
 from fieldcraft_loop.github_source import GitHubSourceError
 from fieldcraft_web import server
-from fieldcraft_web.limits import RateLimiter
 
 client = TestClient(server.app)
 
@@ -63,12 +62,6 @@ def fake_git(monkeypatch):
         monkeypatch.setattr(gs.shutil, "which", lambda name: "/usr/bin/git")
     arm.calls = calls
     return arm
-
-
-@pytest.fixture(autouse=True)
-def fresh_rate_limit(monkeypatch):
-    """This module posts more than the deployed per-IP hourly budget."""
-    monkeypatch.setattr(server, "rate", RateLimiter(per_hour=100))
 
 
 # --- URL validation ---------------------------------------------------------

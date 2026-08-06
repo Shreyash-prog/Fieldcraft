@@ -58,10 +58,24 @@ Legend: **P0** = must exist before any real/untrusted connection is wired. **P1*
 - **Problem:** fine as a *model*, nowhere near "agents get scoped CRUD on a customer's AWS/DB." No real secret storage, IAM/STS integration, or durable audit.
 - **Remediation:** keep the interface; back it with real short-lived scoped tokens (STS/KMS-style), durable audit, and **destructive-op approval enforced at grant time** (broker denies `delete` without an approval token) — not in loop code.
 
-### P0-4 · Durable, transactional spend/rate enforcement
-- **Where:** `fieldcraft_web/limits.py` — `RateLimiter`/`CostTracker`/`Concurrency` hold state in process memory.
-- **Problem:** a restart/crash-loop resets the daily spend cap; the cost ceiling is not durable.
-- **Remediation:** persist counters (DB/Redis) and enforce transactionally before any spend, especially before enabling live models or real cloud calls.
+### P0-4 · Durable, transactional spend/rate enforcement — **ADDRESSED for single-node**
+*Multi-instance correctness still requires a shared store.*
+
+- **Where:** `fieldcraft_web/ledger.py` (SQLite in `FC_DATA_DIR`, alongside the run/event stores), wired into `create_brief`, `_drive`/`submit_review`, and `/healthz`.
+- **Original problem:** `RateLimiter`/`CostTracker` held counters in process memory, so a restart or crash-loop reset the daily spend cap.
+
+**What exists now:**
+- **Reserve → settle/release.** A brief reserves its clamped per-run budget *before* it is created; the run's terminal state settles the reservation to the cost the loop actually reported (up or down); a failure to start releases it. `settle` is idempotent, so a retried or double-driven run cannot double-charge.
+- **One transaction per decision.** `reserve()` checks the per-IP rolling-hour rate, the global daily cap, and the **new per-user daily cap** (`FC_USER_DAILY_COST_CAP_USD`, default 1) and inserts the reservation inside a single `BEGIN IMMEDIATE`, under the store lock. Denials name the limit (`rate` | `global_daily` | `user_daily`) and record nothing. Tested: 20 threads racing for a cap that fits 4 → exactly 4 win, total never exceeds the cap.
+- **Durable.** Spend and rate rows persist in SQLite: reopening the ledger from the same directory preserves the day's spend, and an *unsettled* reservation survives a restart and can still be settled. Tested as the headline P0-4 property.
+- **Windows.** UTC calendar day for cost, rolling hour for rate; rows older than two days are pruned on write. `/healthz.daily_cost_remaining` is read from the ledger, not memory.
+- **Concurrency stays in memory on purpose** (`limits.py:Concurrency`): it bounds live threads in this process, not money, so there is nothing to carry across a restart. `RateLimiter`/`CostTracker` are superseded and no longer wired in.
+
+**What this does not claim:**
+- **Single-node only.** Correctness rests on `BEGIN IMMEDIATE` over one SQLite file. Two instances on separate volumes would each enforce their own cap and could double-spend. Multi-instance needs the ledger in Postgres/Redis (P2-1).
+- **Best-effort against provider-side truth.** We settle what the loop reports the agent spent; the provider's accounting is authoritative. Under-reported cost is under-recorded here.
+- **Enforced per brief, not per API call.** A single run can overshoot its reservation before it settles; the engine's per-run budget clamp is what bounds that overshoot, and the cap is what bounds how many runs may start.
+- **Offline runs reserve and settle but do not *block* on the money caps** (`enforce_cost=False`), matching prior behaviour: their costs are simulated, so blocking a $0 mock run on a dollar ceiling would be a false guard. Their simulated cost is still recorded and still shows in `daily_cost_remaining`, so — as before — heavy mock use can draw the displayed global budget down and gate live runs.
 
 ### P0-5 · Provenance + injection defense on ingested content
 - **Where:** live prompt assembly (`fieldcraft_loop/live_adapter.py:_prompt`) pulls task files, `NOTES.md`, acceptance criteria, and Field-Guide-bootstrapped repo content; the flywheel (`fieldcraft_guide/flywheel.py`) writes learned traps **back** into the guide.

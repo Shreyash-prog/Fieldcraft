@@ -28,8 +28,10 @@ class Settings:
     briefs_per_hour = _int("FC_BRIEFS_PER_HOUR", 10)
     # how many briefs may run at once (bounds threads and cost)
     max_concurrent = _int("FC_MAX_CONCURRENT", 4)
-    # global spend ceiling per day across all live runs
+    # global spend ceiling per day across all live runs (durable; see ledger.py)
     daily_cost_cap_usd = _float("FC_DAILY_COST_CAP_USD", 5.0)
+    # per-tenant slice of that ceiling, so one user can't drain the whole day
+    user_daily_cost_cap_usd = _float("FC_USER_DAILY_COST_CAP_USD", 1.0)
     # hard clamp on any single run's budget
     max_budget_per_run_usd = _float("FC_MAX_BUDGET_PER_RUN_USD", 1.0)
     # hard clamp on iterations per run

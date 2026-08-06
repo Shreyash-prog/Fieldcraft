@@ -1,6 +1,12 @@
-"""Guards that make a public deployment safe: per-IP rate limiting, a global
-daily spend cap, and a concurrency limit. In-memory and single-instance by
-design (a POC); a multi-instance deploy would back these with Redis.
+"""In-memory deployment guards.
+
+`Concurrency` is still what the server uses: it bounds live threads in *this*
+process, so there is nothing to carry across a restart.
+
+`RateLimiter` and `CostTracker` have been **superseded by `ledger.py`**, which
+does the same accounting durably and transactionally (HARDENING P0-4) — a
+restart no longer resets the daily spend cap. They are kept as the in-memory
+reference implementation and are no longer wired into the server.
 """
 from __future__ import annotations
 

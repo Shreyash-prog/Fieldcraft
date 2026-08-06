@@ -28,7 +28,8 @@ from fieldcraft_loop import github_source, sandbox
 from fieldcraft_loop.engine import Engine, TERMINAL
 from . import auth as auth_mod
 from .config import settings
-from .limits import RateLimiter, CostTracker, Concurrency
+from .ledger import Ledger
+from .limits import Concurrency
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("FC_DATA_DIR", ROOT / "out" / "web"))
@@ -48,8 +49,12 @@ TASKS = {
 CONNECTED: dict[str, dict[str, Path]] = {}
 
 engine = Engine(DATA)
-rate = RateLimiter(settings.briefs_per_hour)
-cost = CostTracker()
+# Spend + rate live in the durable ledger (survives restart, enforced in one
+# transaction). Concurrency stays in memory on purpose: it bounds live threads in
+# *this* process, not money, so there is nothing to carry across a restart.
+ledger = Ledger(DATA / "ledger.db", global_cap=settings.daily_cost_cap_usd,
+                user_cap=settings.user_daily_cost_cap_usd,
+                rate_per_hour=settings.briefs_per_hour)
 conc = Concurrency(settings.max_concurrent)
 auth = auth_mod.from_env(DATA)
 
@@ -76,16 +81,22 @@ def owned_run(bid: str, user: str) -> dict:
     return r
 
 
+def _settle(r: dict | None) -> None:
+    """Reconcile a finished run's reservation to what it actually cost. Safe to
+    call more than once (settle is idempotent) and on non-terminal runs."""
+    if r and r["status"] in TERMINAL:
+        ledger.settle(r["config"].get("reservation_id", ""), r["total_cost"])
+
+
 def _drive(bid: str, gated: bool):
-    """Run advance() in the background; account cost + release the slot at the end."""
+    """Run advance() in the background; settle cost + release the slot at the end."""
     def run():
         try:
             r = engine.advance(bid)
         finally:
             if gated:
                 conc.release()
-        if r and r["status"] in TERMINAL:
-            cost.add(r["total_cost"])
+        _settle(r)
     threading.Thread(target=run, daemon=True).start()
 
 
@@ -125,7 +136,8 @@ def client_ip(request: Request) -> str:
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "active_runs": conc.active,
-            "daily_cost_remaining": cost.remaining(settings.daily_cost_cap_usd),
+            # read from the durable ledger, so a restart does not reset it
+            "daily_cost_remaining": ledger.remaining_global(),
             # which sandbox limits this machine really applies — see sandbox.py
             "sandbox_limits": list(sandbox.effective_limits()),
             # false = no invite codes configured, so the deployment is open
@@ -135,7 +147,7 @@ def healthz():
 @app.post("/api/session")
 def create_session(req: SessionReq, request: Request, response: Response):
     """Exchange an invite code for a signed, expiring session cookie."""
-    if not rate.allow("session:" + client_ip(request)):
+    if not ledger.hit("session:" + client_ip(request)):
         raise HTTPException(429, "too many attempts from your IP, try later")
     if not auth.enabled:
         return {"ok": True, "auth_enabled": False, "user": auth_mod.LEGACY_USER}
@@ -155,8 +167,6 @@ def end_session(response: Response):
 
 @app.post("/api/briefs")
 def create_brief(req: CreateBrief, request: Request, user: str = Depends(require_session)):
-    if not rate.allow(client_ip(request)):
-        raise HTTPException(429, "rate limit: too many briefs from your IP, try later")
     mine = CONNECTED.get(user, {})
     connected = req.task in mine
     if connected and (req.adapter != "mock" or req.grader == "tooluse"):
@@ -165,19 +175,32 @@ def create_brief(req: CreateBrief, request: Request, user: str = Depends(require
     live = req.adapter == "claude" or req.grader == "tooluse"
     if live and not settings.allow_live:
         raise HTTPException(403, "live mode is disabled on this deployment")
-    if live and cost.remaining(settings.daily_cost_cap_usd) <= 0:
-        raise HTTPException(429, "daily spend cap reached; live runs paused until tomorrow")
-    if not conc.acquire():
-        raise HTTPException(503, "too many concurrent runs; try again shortly")
 
     req.max_iterations = max(1, min(req.max_iterations, settings.max_iterations_cap))
     req.budget = max(0.1, min(req.budget, settings.max_budget_per_run_usd))
+
+    # One transaction decides the rate limit and both spend caps, and holds the
+    # money until the run settles. Offline runs reserve too (so the path is always
+    # exercised and their simulated cost is still accounted) but the money caps
+    # only *block* a run that can really spend — which is what they did before.
+    res = ledger.reserve(user, client_ip(request), req.budget, enforce_cost=live)
+    if not res.ok:
+        raise HTTPException(429, res.message)
+    if not conc.acquire():
+        ledger.release(res.id)
+        raise HTTPException(503, "too many concurrent runs; try again shortly")
+
     goal = ("Make the connected repository's test suite pass" if connected else
             "Implement redact_pii so all tests and acceptance criteria pass")
-    cfg = {**req.model_dump(), "goal": goal}
+    cfg = {**req.model_dump(), "goal": goal, "reservation_id": res.id}
     task_dir = str(mine[req.task] if connected
                    else TASKS.get(req.task, (Path(TASK_DIR), "single"))[0])
-    bid = engine.create(cfg, task_dir, user)
+    try:
+        bid = engine.create(cfg, task_dir, user)
+    except Exception:                      # nothing started: give the money back
+        conc.release()
+        ledger.release(res.id)
+        raise
     _drive(bid, gated=True)
     return {"brief_id": bid, "config": req.model_dump()}
 
@@ -212,6 +235,8 @@ def submit_review(brief_id: str, req: ReviewReq, user: str = Depends(require_ses
     after = engine.submit_review(brief_id, req.kind, req.comment[:2000], user)
     if after and after["status"] == "running":
         _drive(brief_id, gated=False)     # resume without gating (bounded by max_iterations)
+    else:
+        _settle(after)                    # approve/reject ends the run here
     return {"ok": True}
 
 
@@ -235,7 +260,7 @@ def connect_repo(req: ConnectRepo, request: Request, user: str = Depends(require
     so FC_ALLOW_LIVE is untouched by this path). The handle is registered against
     the caller's tenant only; another user never sees it.
     """
-    if not rate.allow(client_ip(request)):
+    if not ledger.hit("connect:" + client_ip(request)):
         raise HTTPException(429, "rate limit: too many requests from your IP, try later")
     if not conc.acquire():                       # a clone is real work; bound it
         raise HTTPException(503, "too many concurrent runs; try again shortly")
