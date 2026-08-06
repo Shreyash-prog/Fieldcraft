@@ -2,104 +2,41 @@
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Fieldcraft</title>
-<style>
-:root{--ink:#131c26;--mut:#647380;--faint:#93a1ac;--line:#e4e9ed;--bg:#f4f6f8;--panel:#fff;
-  --teal:#0c6d5e;--tealbg:#e6f2ef;--amber:#9c5a1e;--amberbg:#faf0e2;--red:#b3261e;--redbg:#fbeae8;
-  --blue:#2a5d8f;--bluebg:#e8f0f7;--chip:#eef1f4;--radius:12px}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);
-  font:15px/1.55 ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-.app{display:grid;grid-template-columns:216px 1fr;min-height:100vh}
-aside{background:var(--panel);border-right:1px solid var(--line);padding:20px 14px;position:sticky;top:0;height:100vh}
-.brand{display:flex;align-items:center;gap:9px;padding:4px 8px 18px}
-.brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--teal),#0a8a75);
-  display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px}
-.brand b{font-size:16px}
-.nav button{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;border-radius:9px;
-  padding:9px 11px;font:500 14px ui-sans-serif;color:var(--mut);cursor:pointer;text-align:left;margin-bottom:2px}
-.nav button:hover{background:var(--bg)}
-.nav button.on{background:var(--tealbg);color:var(--teal);font-weight:600}
-.nav .dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.55}
-.side-foot{position:absolute;bottom:16px;left:14px;right:14px;font-size:11px;color:var(--faint)}
-main{padding:26px 30px 70px;max-width:1000px}
-.head{margin:0 0 4px;font-size:22px} .sub{color:var(--mut);margin:0 0 22px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px}
-.fam{font:600 10px ui-monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);margin:0 0 12px}
-label{display:block;font-size:12px;color:var(--mut);margin:0 0 4px}
-select,input,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
-  font:14px ui-sans-serif;background:#fff;color:var(--ink)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
-button.act{font:600 14px ui-sans-serif;border:0;border-radius:9px;padding:10px 16px;cursor:pointer;color:#fff;background:var(--ink)}
-button.go{background:var(--teal)} button.warn{background:var(--amber)} button.stop{background:var(--red)}
-button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
-button.act:disabled{opacity:.45;cursor:not-allowed}
-.pill{display:inline-flex;align-items:center;gap:6px;font:600 11px ui-monospace;padding:4px 10px;border-radius:20px;background:var(--chip);color:var(--mut)}
-.pill.run{background:var(--bluebg);color:var(--blue)}.pill.rev{background:var(--amberbg);color:var(--amber)}
-.pill.done{background:var(--tealbg);color:var(--teal)}.pill.stop{background:var(--redbg);color:var(--red)}
-.pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
-.pill.run .dot{animation:pulse 1s infinite}@keyframes pulse{50%{opacity:.3}}
-.muted{color:var(--mut)}.hide{display:none}.mt{margin-top:14px}
-/* timeline */
-.tl{position:relative;margin:6px 0 0;padding-left:26px}
-.tl:before{content:"";position:absolute;left:9px;top:6px;bottom:6px;width:2px;background:var(--line)}
-.ev{position:relative;margin:0 0 14px;animation:fade .3s ease}
-@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
-.ev .node{position:absolute;left:-22px;top:2px;width:16px;height:16px;border-radius:50%;border:3px solid var(--panel);background:var(--faint)}
-.ev.tl-teal .node{background:var(--teal)}.ev.tl-blue .node{background:var(--blue)}
-.ev.tl-amber .node{background:var(--amber)}.ev.tl-red .node{background:var(--red)}.ev.tl-grey .node{background:var(--faint)}
-.ev .t{font:600 13px ui-sans-serif}.ev .d{font-size:12.5px;color:var(--mut)}
-/* diff viewer */
-.diffwrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px}
-.tabs{display:flex;gap:2px;background:#f7f9fa;border-bottom:1px solid var(--line);padding:6px 6px 0;overflow-x:auto}
-.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 11px;font:600 12px ui-monospace;color:var(--mut);cursor:pointer;white-space:nowrap}
-.tabs button.on{color:var(--ink);border-bottom-color:var(--teal)}
-pre.diff{margin:0;padding:11px 12px;background:#0f1720;overflow:auto;font:12px/1.5 ui-monospace;color:#c7d0d9;max-height:260px}
-pre.diff .add{color:#7ee3c7;display:block}pre.diff .del{color:#f0a8a2;display:block}
-pre.diff .hd{color:#7aa2c2;display:block}pre.diff .cx{display:block}
-.crit{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13.5px}
-.mark{font:700 10px ui-monospace;padding:2px 6px;border-radius:5px;margin-top:1px;white-space:nowrap}
-.mark.pass{background:var(--tealbg);color:var(--teal)}.mark.fail{background:var(--redbg);color:var(--red)}
-.mark.info{background:var(--chip);color:var(--mut)}
-.crit .ev2{color:var(--mut);font-family:ui-monospace;font-size:12px}
-.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:14px}
-.metric .n{font:700 20px ui-monospace}.metric .l{font-size:12px;color:var(--mut)}
-.traj{display:flex;align-items:flex-end;gap:6px;height:56px;margin-top:6px}
-table{width:100%;border-collapse:collapse;font-size:13.5px}
-th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line)}
-th:first-child,td:first-child{text-align:left;font-family:ui-monospace}
-th{font:600 10px ui-monospace;color:var(--mut);text-transform:uppercase}
-tr.click{cursor:pointer}tr.click:hover td{background:var(--bg)}
-.flag{background:var(--amberbg);border-left:4px solid var(--amber);padding:10px 14px;border-radius:8px;font-size:13.5px;margin-top:12px}
-.spin{color:var(--mut);font-size:13px;padding:22px 0;display:flex;align-items:center;gap:10px}
-.spin .s{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-details.pol{border:1px solid var(--line);border-radius:9px;padding:0 12px;margin-top:12px}
-details.pol summary{cursor:pointer;padding:10px 0;font:600 13px ui-sans-serif;color:var(--ink)}
-.chkrow{display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 12px}
-.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink)}
-.chk input{width:auto}
-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5}
-svg .box.core{fill:var(--tealbg);stroke:var(--teal)}
-svg .box.gov{fill:var(--amberbg);stroke:var(--amber)}
-svg .lbl{font:600 12px ui-sans-serif;fill:var(--ink)}svg .sub{font:11px ui-sans-serif;fill:var(--mut)}
-svg .arr{stroke:var(--faint);stroke-width:1.5;fill:none;marker-end:url(#ah)}
-</style></head>
+<link rel="stylesheet" href="/static/app.css"></head>
 <body>
 <div class="app">
   <aside>
-    <div class="brand"><div class="logo">F</div><b>Fieldcraft</b></div>
+    <div class="brand"><div class="logo">F</div>
+      <div><b>Fieldcraft</b><span class="tag">CONTROL ROOM</span></div></div>
     <div class="nav">
-      <button id="n-overview" class="on" onclick="nav('overview')"><span class="dot"></span>Overview</button>
+      <button id="n-board" class="on" onclick="nav('board')"><span class="dot"></span>Board</button>
+      <div class="navsep"></div>
+      <button id="n-overview" onclick="nav('overview')"><span class="dot"></span>Overview</button>
       <button id="n-run" onclick="nav('run')"><span class="dot"></span>Run a task</button>
       <button id="n-history" onclick="nav('history')"><span class="dot"></span>History</button>
       <button id="n-reports" onclick="nav('reports')"><span class="dot"></span>Reports</button>
     </div>
     <div class="side-foot">AI-assisted delivery,<br>governed &amp; measured.</div>
   </aside>
-  <main>
+  <main id="main" class="wide">
+    <!-- BOARD -->
+    <section id="v-board">
+      <div class="board-head">
+        <div class="t">
+          <h1>Board</h1>
+          <p>Every ticket is a development task. Drag a card to move it. In the run phase a
+             ticket gets a repo, PDF context, and the same task run three ways to compare.</p>
+        </div>
+        <div class="actions">
+          <span class="pill" id="tkCount"><span class="dot"></span>0 tickets</span>
+          <button class="act go" onclick="openTicketModal()">＋ New ticket</button>
+        </div>
+      </div>
+      <div class="board-wrap" id="boardWrap"><div class="board" id="board"></div></div>
+    </section>
+
     <!-- OVERVIEW -->
-    <section id="v-overview">
+    <section id="v-overview" class="hide">
       <h1 class="head">How Fieldcraft works</h1>
       <p class="sub">An AI coding agent, driven through a governed develop→verify→iterate loop, with every step recorded as an event — so the run is auditable, resumable, and measurable.</p>
       <div class="card">
@@ -246,11 +183,233 @@ async function submitCode(){
   el('gateMsg').textContent=r.status===429?'too many attempts — wait a bit':'invalid code';
 }
 
+const VIEWS=['board','overview','run','history','reports'];
 function nav(v){
-  ['overview','run','history','reports'].forEach(x=>{
+  VIEWS.forEach(x=>{
     el('v-'+x).classList.toggle('hide', x!==v); el('n-'+x).classList.toggle('on', x===v);});
+  el('main').classList.toggle('wide', v==='board');
   if(v==='history') loadHistory();
+  if(v==='board') loadBoard();
 }
+
+// ---------- board ----------
+const COLUMNS=[['backlog','Backlog'],['in_progress','In progress'],['review','Review'],['done','Done']];
+let TICKETS=[];
+async function loadBoard(){
+  const r=await fetch('/api/tickets');
+  if(!r.ok) return;                       // 401 already raised the gate
+  TICKETS=(await r.json()).tickets;
+  renderBoard();
+}
+function renderBoard(){
+  el('tkCount').innerHTML=`<span class="dot"></span>${TICKETS.length} ticket${TICKETS.length===1?'':'s'}`;
+  el('board').innerHTML=COLUMNS.map(([status,label])=>{
+    const mine=TICKETS.filter(t=>t.status===status);
+    // An empty column stays quiet; the drop target is revealed only mid-drag.
+    const empty=mine.length?''
+      :(status==='backlog'&&!TICKETS.length?'<div class="col-empty">No tickets yet — create one</div>':'');
+    return `<div class="col" data-status="${status}">
+        <div class="col-head"><span class="k"></span><span class="n">${label}</span>
+          <span class="c">${mine.length}</span></div>
+        <div class="col-body">${mine.map(ticketCard).join('')}${empty}
+          <div class="col-drop"></div></div></div>`;
+  }).join('');
+  markClipped();
+  wireDnd();
+  boardFades();
+}
+// Fade the last line only where the text really is cut off.
+function markClipped(){
+  document.querySelectorAll('.tk .desc').forEach(d=>
+    d.classList.toggle('clip', d.scrollHeight>d.clientHeight+1));
+}
+// Light the edge that actually has more board behind it.
+function boardFades(){
+  const b=el('board'), w=el('boardWrap'); if(!b||!w) return;
+  const max=b.scrollWidth-b.clientWidth;
+  w.classList.toggle('more-l', b.scrollLeft>2);
+  w.classList.toggle('more-r', max>2 && b.scrollLeft<max-2);
+}
+el('board').addEventListener('scroll',boardFades,{passive:true});
+addEventListener('resize',()=>{markClipped();boardFades();});
+// Ids the board has already drawn, so a re-render doesn't replay every card's
+// entrance animation — only genuinely new cards animate in.
+const SEEN=new Set();
+function ticketCard(t){
+  // Title first. The id is metadata in the foot, and the run-phase placeholders
+  // collapse to one quiet marker — the drawer is where they're spelled out.
+  const enter=SEEN.has(t.id)?'':' enter'; SEEN.add(t.id);
+  return `<article class="tk${enter}" draggable="true" data-id="${esc(t.id)}" onclick="openTicket('${esc(t.id)}')">
+    <div class="ttl">${esc(t.title)}</div>
+    ${t.description?`<div class="desc">${esc(t.description)}</div>`:''}
+    <div class="foot">
+      <span class="id">${esc(t.id)}</span>
+      <span class="ph" title="Repo, PDF context and the three-mode comparison attach in the run phase">run phase</span>
+    </div></article>`;
+}
+let DRAG=null;
+function endDrag(){
+  DRAG=null; document.body.classList.remove('dragging');
+  document.querySelectorAll('.col').forEach(k=>k.classList.remove('over'));
+}
+function wireDnd(){
+  document.querySelectorAll('.tk').forEach(c=>{
+    c.addEventListener('dragstart',e=>{DRAG=c.dataset.id;c.classList.add('drag');
+      document.body.classList.add('dragging');           // reveals the drop targets
+      e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',DRAG);});
+    c.addEventListener('dragend',()=>{c.classList.remove('drag');endDrag();});
+  });
+  document.querySelectorAll('.col').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';
+      col.classList.add('over');});
+    col.addEventListener('dragleave',e=>{if(!col.contains(e.relatedTarget)) col.classList.remove('over');});
+    col.addEventListener('drop',e=>{e.preventDefault();
+      const id=DRAG||e.dataTransfer.getData('text/plain');
+      endDrag();
+      if(id) moveTicket(id, col.dataset.status);});
+  });
+}
+// A short-lived message for writes that failed. Errors only — success is visible.
+let TOAST=null;
+function toast(msg,kind='bad'){
+  if(TOAST){ TOAST.el.remove(); clearTimeout(TOAST.t); }
+  const d=document.createElement('div'); d.className='toast '+kind;
+  d.setAttribute('role','status'); d.setAttribute('aria-live','polite');
+  d.innerHTML=`<span class="tdot"></span><span>${esc(msg)}</span>`;
+  document.body.appendChild(d);
+  const t=setTimeout(()=>{d.classList.add('out');
+    setTimeout(()=>{d.remove(); if(TOAST&&TOAST.el===d) TOAST=null;},220);},3600);
+  TOAST={el:d,t};
+}
+async function moveTicket(id,status){
+  const t=TICKETS.find(x=>x.id===id);
+  if(!t||t.status===status) return;
+  const was=t.status; t.status=status; renderBoard();      // optimistic
+  let r;
+  try{
+    r=await fetch(`/api/tickets/${id}`,{method:'PATCH',
+      headers:{'content-type':'application/json'},body:JSON.stringify({status})});
+  }catch(e){
+    t.status=was; renderBoard(); toast('Network error — the card was put back'); return;
+  }
+  if(!r.ok){                                               // put it back, and say why
+    t.status=was; renderBoard();
+    toast(r.status===401?'Session expired — the card was put back'
+                        :`Couldn’t move that ticket (${r.status}) — the card was put back`);
+  } else { Object.assign(t, await r.json()); }
+}
+
+// ---------- new-ticket modal ----------
+let NEW_STATUS='backlog';
+function openTicketModal(){
+  NEW_STATUS='backlog';
+  const d=document.createElement('div'); d.className='scrim'; d.id='scrim';
+  d.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-label="New ticket">
+    <h2>New ticket</h2>
+    <p class="muted" style="margin:0;font-size:13px">A development task for the loop to work.</p>
+    <div class="row"><label for="tkTitle">Title</label>
+      <input id="tkTitle" maxlength="200" placeholder="e.g. Harden the connect-repo path"></div>
+    <div class="row"><label for="tkDesc">Description</label>
+      <textarea id="tkDesc" rows="5" maxlength="8000" placeholder="What needs to change, and how you'd know it worked."></textarea></div>
+    <div class="row"><label>Column</label><div class="seg" id="tkSeg">${
+      COLUMNS.map(([s,l])=>`<button data-s="${s}" class="${s==='backlog'?'on':''}">${l}</button>`).join('')}</div></div>
+    <p class="muted" style="font-size:12px;margin:14px 0 0">Repo, PDF context and the three-mode
+      comparison attach to a ticket in the run phase — the fields exist, nothing is wired yet.</p>
+    <div class="btns"><button class="act ghost" onclick="closeScrim()">Cancel</button>
+      <button class="act go" id="tkSave" onclick="saveTicket()">Create ticket</button></div></div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click',e=>{if(e.target===d) closeScrim();});
+  el('tkSeg').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
+    NEW_STATUS=b.dataset.s;
+    el('tkSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
+  el('tkTitle').focus();
+  el('tkTitle').addEventListener('keydown',e=>{if(e.key==='Enter') saveTicket();});
+}
+function closeScrim(){ const s=el('scrim'); if(s) s.remove(); }
+async function saveTicket(){
+  const title=el('tkTitle').value.trim();
+  if(!title){ el('tkTitle').focus(); return; }
+  el('tkSave').disabled=true;
+  const r=await fetch('/api/tickets',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({title,description:el('tkDesc').value,status:NEW_STATUS})});
+  if(!r.ok){ el('tkSave').disabled=false; return; }
+  TICKETS.unshift(await r.json()); closeScrim(); renderBoard();
+}
+
+// ---------- ticket drawer ----------
+let DRAWER_ID=null;
+function openTicket(id){
+  if(DRAG) return;                                   // ignore the click that ends a drag
+  const t=TICKETS.find(x=>x.id===id); if(!t) return;
+  closeDrawer();
+  DRAWER_ID=id;
+  const sc=document.createElement('div'); sc.className='dscrim'; sc.id='dscrim';
+  sc.addEventListener('click',closeDrawer);           // same dismissal as the modal
+  document.body.appendChild(sc);
+  const d=document.createElement('div'); d.className='drawer'; d.id='drawer';
+  d.innerHTML=`<div class="dh"><div>
+      <span class="id mono" style="font-size:10px;color:var(--faint)">${esc(t.id)}</span>
+      <h2>${esc(t.title)}</h2></div>
+      <button class="iconbtn" onclick="closeDrawer()" aria-label="Close">✕</button></div>
+    <div class="db">
+      <div class="seg" id="dwSeg">${COLUMNS.map(([s,l])=>
+        `<button data-s="${s}" class="${t.status===s?'on':''}">${l}</button>`).join('')}</div>
+      <p class="fam mt">Task</p>
+      <p class="body">${t.description?esc(t.description):'<span class="muted">No description.</span>'}</p>
+      <dl class="kv"><dt>created</dt><dd>${new Date(t.created_at*1000).toLocaleString()}</dd>
+        <dt>updated</dt><dd>${new Date(t.updated_at*1000).toLocaleString()}</dd></dl>
+
+      <p class="fam" style="margin-top:24px">Coming in the run phase</p>
+      <div class="soon-block"><div class="h">◆ Connected repository<span class="tagx">not wired</span></div>
+        <p>Point this ticket at a public GitHub repo. The connect endpoint already exists
+           (<span class="mono">/api/repos/connect</span>); the ticket keeps
+           <span class="mono">repo_url</span> and <span class="mono">repo_task_handle</span> for it.</p></div>
+      <div class="soon-block"><div class="h">▤ PDF context<span class="tagx">not wired</span></div>
+        <p>Attach specs and design docs as context for the agent. Stored against
+           <span class="mono">pdf_context_ids</span>.</p></div>
+      <div class="soon-block"><div class="h">✦ Obsidian brain<span class="tagx">not wired</span></div>
+        <p>A linked knowledge base the loop reads from and writes learnings back into.</p></div>
+      <div class="soon-block"><div class="h">▶ Three-mode comparison<span class="tagx">not wired</span></div>
+        <p>Run this ticket three ways and compare cost, iterations and effectiveness.
+           Each run lands in <span class="mono">runs[]</span> tagged with its mode.</p>
+        <div class="modes">
+          <div class="mode"><span class="mi">1</span>Human in the loop · reviews only</div>
+          <div class="mode"><span class="mi">2</span>Human in the loop · reviews + comments</div>
+          <div class="mode"><span class="mi">3</span>Autonomous · no human turn</div>
+        </div></div>
+
+      <div class="danger" id="dz">
+        <p>Deleting a ticket is permanent — there is no undo.</p>
+        <div class="row2" id="dzRow">
+          <button class="act ghost" onclick="armDelete()">Delete ticket…</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(d);
+  el('dwSeg').addEventListener('click',async e=>{const b=e.target.closest('button'); if(!b)return;
+    await moveTicket(t.id,b.dataset.s);
+    el('dwSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
+}
+function closeDrawer(){ const d=el('drawer'); if(d) d.remove();
+  const s=el('dscrim'); if(s) s.remove(); DRAWER_ID=null; }
+// Step one of the delete: swap in the confirm, don't destroy anything yet.
+function armDelete(){
+  const dz=el('dz'), id=DRAWER_ID; if(!dz||!id) return;
+  dz.classList.add('armed');
+  el('dzRow').innerHTML=`<button class="act stop" onclick="deleteTicket('${esc(id)}')">Yes, delete it</button>`+
+    `<button class="act ghost" onclick="disarmDelete()">Cancel</button>`;
+}
+function disarmDelete(){
+  const dz=el('dz'); if(!dz) return;
+  dz.classList.remove('armed');
+  el('dzRow').innerHTML=`<button class="act ghost" onclick="armDelete()">Delete ticket…</button>`;
+}
+async function deleteTicket(id){
+  const r=await fetch(`/api/tickets/${id}`,{method:'DELETE'});
+  if(!r.ok){ toast(`Couldn’t delete that ticket (${r.status})`); return; }
+  TICKETS=TICKETS.filter(t=>t.id!==id); closeDrawer(); renderBoard();
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeScrim();closeDrawer();}});
 
 // ---------- diff viewer ----------
 function splitDiff(diff){
@@ -462,6 +621,7 @@ const RENDER={
     d.credential_checks.map(c=>`<div class="crit"><span class="mark ${c.allowed?'pass':'fail'}">${c.allowed?'ALLOW':'DENY'}</span><span class="ev2">${esc(c.cap)}</span></div>`).join('')+
     `<p class="muted" style="font-size:12px;margin-top:8px">audit entries: ${d.audit_entries}</p>`);}
 };
+loadBoard();      // Board is the front door
 loadTasks();
 </script>
 </body></html>

@@ -1,0 +1,409 @@
+/* Fieldcraft — "control room" design system.
+   Dark-first, one accent (teal), layered elevation, hairline borders, restrained
+   motion. Hand-written; no framework, no build step. Load once from index.html. */
+
+:root{
+  /* canvas + elevation */
+  --bg:#08090b; --bg-2:#0b0d10; --bg-3:#0e1114;
+  --glass:rgba(255,255,255,.028); --glass-2:rgba(255,255,255,.05); --glass-3:rgba(255,255,255,.08);
+  --line:rgba(255,255,255,.075); --line-2:rgba(255,255,255,.14);
+  /* type */
+  /* --faint carries the smallest text in the UI (ids, counts, chip labels), so it
+     has to clear AA on the darkest surface: #5c6874 measured 3.42:1, this is 5.0:1. */
+  --ink:#e9eef3; --mut:#8d9aa8; --faint:#78838f;
+  /* one confident accent */
+  --teal:#14e0b0; --teal-2:#0bbd93; --teal-dim:rgba(20,224,176,.12); --teal-line:rgba(20,224,176,.32);
+  /* status hues, used only in small doses */
+  --blue:#6aa5ff; --blue-dim:rgba(106,165,255,.12);
+  --amber:#f2b544; --amber-dim:rgba(242,181,68,.12);
+  --red:#ff7a72;  --red-dim:rgba(255,122,114,.12);
+  --radius:14px; --radius-sm:10px;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+  --shadow-lg:0 2px 6px rgba(0,0,0,.45),0 24px 60px -20px rgba(0,0,0,.85);
+  --ease:cubic-bezier(.2,.7,.3,1); --fast:140ms; --slow:240ms;
+  --display:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Segoe UI Variable Display",
+            "Segoe UI",Inter,Roboto,system-ui,sans-serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.6 var(--sans);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  /* two barely-there pools of light so the near-black canvas isn't flat */
+  background-image:
+    radial-gradient(900px 520px at 12% -8%,rgba(20,224,176,.055),transparent 60%),
+    radial-gradient(760px 460px at 92% 0%,rgba(106,165,255,.04),transparent 60%);
+  background-attachment:fixed;
+}
+.mono{font-family:var(--mono)}
+::selection{background:var(--teal-line);color:#04120e}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:6px}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+aside{
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  border-right:1px solid var(--line);padding:22px 14px;position:sticky;top:0;height:100vh;
+  backdrop-filter:blur(12px);
+}
+.brand{display:flex;align-items:center;gap:11px;padding:4px 8px 22px}
+.brand .logo{
+  width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--teal),var(--teal-2));color:#03130f;
+  font:800 15px var(--display);box-shadow:0 0 0 1px rgba(20,224,176,.35),0 6px 18px -6px rgba(20,224,176,.5);
+}
+.brand b{font:650 17px/1 var(--display);letter-spacing:-.02em}
+.brand .tag{display:block;font:500 10px var(--mono);letter-spacing:.14em;color:var(--faint);margin-top:3px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{
+  display:flex;align-items:center;gap:11px;width:100%;background:none;border:0;border-radius:10px;
+  padding:10px 12px;font:500 14px var(--sans);color:var(--mut);cursor:pointer;text-align:left;
+  transition:background var(--fast) var(--ease),color var(--fast) var(--ease);
+}
+.nav button:hover{background:var(--glass-2);color:var(--ink)}
+.nav button.on{background:var(--teal-dim);color:var(--teal);font-weight:600;box-shadow:inset 0 0 0 1px var(--teal-line)}
+.nav .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
+.nav button.on .dot{opacity:1;box-shadow:0 0 8px var(--teal)}
+.navsep{height:1px;background:var(--line);margin:14px 12px}
+.side-foot{position:absolute;bottom:18px;left:16px;right:16px;font:11px/1.5 var(--mono);color:var(--faint)}
+/* min-width:0 matters: as a grid item, main's automatic minimum is its
+   min-content, and the board's 4×268px columns would otherwise blow the 1fr
+   track wider than the viewport — scrolling the whole page sideways and taking
+   the board header's actions off-screen. Zeroed, the board scrolls itself. */
+main{padding:30px 34px 80px;max-width:1080px;min-width:0}
+/* the board view is an app shell, not a document: it claims the viewport height
+   so the columns fill it instead of floating in the top third. */
+main.wide{max-width:none;display:flex;flex-direction:column;padding-bottom:26px;min-height:0}
+
+/* ---------- headings ---------- */
+.head{margin:0 0 6px;font:650 26px/1.2 var(--display);letter-spacing:-.025em}
+.sub{color:var(--mut);margin:0 0 24px;max-width:70ch}
+.fam{font:600 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:0 0 14px}
+
+/* ---------- surfaces ---------- */
+.card{
+  background:var(--glass);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 22px;margin-bottom:16px;backdrop-filter:blur(10px);box-shadow:var(--shadow);
+}
+label{display:block;font:500 12px var(--sans);color:var(--mut);margin:0 0 5px}
+select,input,textarea{
+  width:100%;padding:9px 11px;border:1px solid var(--line-2);border-radius:var(--radius-sm);
+  font:14px var(--sans);background:var(--bg-3);color:var(--ink);
+  transition:border-color var(--fast) var(--ease),box-shadow var(--fast) var(--ease);
+}
+select:focus,input:focus,textarea:focus{
+  outline:0;border-color:var(--teal-line);box-shadow:0 0 0 3px var(--teal-dim)
+}
+textarea{resize:vertical;line-height:1.6}
+::placeholder{color:var(--faint)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:13px}
+
+/* ---------- buttons ---------- */
+button.act{
+  font:600 14px var(--sans);border:1px solid transparent;border-radius:10px;padding:10px 16px;
+  cursor:pointer;color:var(--ink);background:var(--glass-2);
+  transition:transform var(--fast) var(--ease),background var(--fast) var(--ease),
+             box-shadow var(--fast) var(--ease),border-color var(--fast) var(--ease);
+}
+button.act:hover{background:var(--glass-3);transform:translateY(-1px)}
+button.act:active{transform:translateY(0)}
+button.go{background:linear-gradient(145deg,var(--teal),var(--teal-2));color:#03130f;
+  box-shadow:0 6px 20px -8px rgba(20,224,176,.7)}
+button.go:hover{box-shadow:0 10px 26px -8px rgba(20,224,176,.85)}
+button.warn{background:var(--amber-dim);color:var(--amber);border-color:rgba(242,181,68,.3)}
+button.stop{background:var(--red-dim);color:var(--red);border-color:rgba(255,122,114,.3)}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--line-2)}
+button.ghost:hover{background:var(--glass-2)}
+button.act:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.iconbtn{background:none;border:0;color:var(--mut);cursor:pointer;font-size:18px;line-height:1;
+  padding:6px 8px;border-radius:8px;transition:background var(--fast),color var(--fast)}
+.iconbtn:hover{background:var(--glass-2);color:var(--ink)}
+
+/* ---------- pills ---------- */
+.pill{display:inline-flex;align-items:center;gap:7px;font:600 11px var(--mono);padding:4px 11px;
+  border-radius:20px;background:var(--glass-2);color:var(--mut);border:1px solid var(--line)}
+.pill.run{background:var(--blue-dim);color:var(--blue);border-color:rgba(106,165,255,.28)}
+.pill.rev{background:var(--amber-dim);color:var(--amber);border-color:rgba(242,181,68,.28)}
+.pill.done{background:var(--teal-dim);color:var(--teal);border-color:var(--teal-line)}
+.pill.stop{background:var(--red-dim);color:var(--red);border-color:rgba(255,122,114,.28)}
+.pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.run .dot{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+.muted{color:var(--mut)}.hide{display:none!important}.mt{margin-top:14px}
+
+/* ======================================================================
+   BOARD
+   ====================================================================== */
+.board-head{
+  position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px 24px;margin-bottom:20px;background:linear-gradient(180deg,var(--glass-2),transparent);
+  display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;flex:none;
+}
+/* one sheen, once, on arrival — a loop that never stops and never means anything
+   is noise on a screen you keep open all day. */
+.board-head::before{
+  content:"";position:absolute;inset:-40% -10%;pointer-events:none;
+  background:linear-gradient(105deg,transparent 38%,rgba(20,224,176,.10) 48%,
+             rgba(106,165,255,.07) 54%,transparent 64%);
+  animation:sheen 2.4s var(--ease) .15s 1 both;
+}
+@keyframes sheen{from{transform:translateX(-55%)}to{transform:translateX(55%)}}
+.board-head::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--teal-line),transparent);
+}
+.board-head .t{position:relative}
+.board-head h1{margin:0 0 4px;font:650 27px/1.15 var(--display);letter-spacing:-.03em}
+.board-head p{margin:0;color:var(--mut);font-size:13.5px;max-width:62ch}
+.board-head .actions{position:relative;display:flex;gap:10px;align-items:center}
+
+#v-board{display:flex;flex-direction:column;flex:1;min-height:0}
+.board-wrap{position:relative;flex:1;min-height:280px;display:flex}
+/* 248px min: four columns + gaps = 1034px, which clears a 1440px laptop
+   (1440 − 248 sidebar − 56 padding = 1136) with room to spare. */
+.board{
+  flex:1;display:grid;grid-template-columns:repeat(4,minmax(248px,1fr));gap:14px;
+  align-items:stretch;overflow-x:auto;overflow-y:hidden;padding-bottom:8px;
+}
+/* when it does overflow, say so: a slim persistent track plus an edge fade that
+   only lights up on the side that actually has more board. */
+.board::-webkit-scrollbar{height:10px}
+.board::-webkit-scrollbar-track{background:transparent}
+.board::-webkit-scrollbar-thumb{background:var(--glass-3);border-radius:20px;
+  border:3px solid transparent;background-clip:content-box}
+.board::-webkit-scrollbar-thumb:hover{background:var(--line-2);background-clip:content-box}
+.board-wrap::before,.board-wrap::after{
+  content:"";position:absolute;top:0;bottom:0;width:60px;pointer-events:none;z-index:2;
+  opacity:0;transition:opacity var(--slow) var(--ease)}
+.board-wrap::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+.board-wrap::after{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
+.board-wrap.more-l::before{opacity:1}
+.board-wrap.more-r::after{opacity:1}
+
+.col{
+  background:linear-gradient(180deg,rgba(255,255,255,.026),rgba(255,255,255,.008));
+  border:1px solid var(--line);border-radius:var(--radius);padding:14px 12px 12px;
+  display:flex;flex-direction:column;min-height:0;
+  transition:background var(--slow) var(--ease),border-color var(--slow) var(--ease);
+}
+.col.over{background:var(--teal-dim);border-color:var(--teal-line);box-shadow:inset 0 0 40px -18px var(--teal)}
+.col-head{display:flex;align-items:center;gap:9px;padding:2px 6px 12px;flex:none}
+.col-head .k{width:7px;height:7px;border-radius:2px;background:var(--faint);transform:rotate(45deg)}
+.col[data-status=in_progress] .col-head .k{background:var(--blue);box-shadow:0 0 10px var(--blue)}
+.col[data-status=review] .col-head .k{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.col[data-status=done] .col-head .k{background:var(--teal);box-shadow:0 0 10px var(--teal)}
+.col-head .n{font:600 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+.col-head .c{margin-left:auto;font:600 11px var(--mono);color:var(--faint);
+  background:var(--glass-2);border:1px solid var(--line);border-radius:20px;padding:1px 8px}
+/* the column, not the page, is what scrolls when a column gets long */
+.col-body{display:flex;flex-direction:column;gap:9px;flex:1;min-height:60px;
+  overflow-y:auto;overflow-x:hidden}
+.col-body::-webkit-scrollbar{width:8px}
+.col-body::-webkit-scrollbar-track{background:transparent}
+.col-body::-webkit-scrollbar-thumb{background:var(--glass-2);border-radius:20px;
+  border:2px solid transparent;background-clip:content-box}
+.col-body:hover::-webkit-scrollbar-thumb{background:var(--glass-3);background-clip:content-box}
+
+.tk{
+  /* --card tracks the card's own background so the truncation fade can blend
+     into it in both the resting and hover states */
+  position:relative;--card:var(--bg-2);
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:12px 14px 10px;cursor:grab;
+  transition:transform var(--fast) var(--ease),border-color var(--fast) var(--ease),
+             box-shadow var(--fast) var(--ease),background var(--fast) var(--ease);
+}
+/* Only cards the board hasn't shown before animate in. renderBoard() rebuilds
+   the whole board's innerHTML, so animating every .tk would replay the entrance
+   on every card after each drop, create and delete. */
+.tk.enter{animation:cardin var(--slow) var(--ease) both}
+@keyframes cardin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.tk:hover{--card:var(--bg-3);transform:translateY(-2px);border-color:var(--line-2);
+  box-shadow:var(--shadow-lg)}
+.tk:active{cursor:grabbing}
+.tk.drag{opacity:.45;transform:rotate(1.2deg) scale(.98);cursor:grabbing}
+.tk::before{                       /* accent spine, lights up on hover */
+  content:"";position:absolute;left:0;top:12px;bottom:12px;width:2px;border-radius:2px;
+  background:var(--line-2);
+  transition:background var(--fast) var(--ease),top var(--fast) var(--ease),bottom var(--fast) var(--ease)}
+.tk:hover::before{background:var(--teal);top:8px;bottom:8px}
+/* the title leads the card; everything else is metadata under it */
+.tk .ttl{font:600 14.5px/1.4 var(--sans);margin:0 0 5px;letter-spacing:-.012em;color:var(--ink)}
+.tk .desc{position:relative;font-size:12.5px;line-height:1.5;color:var(--mut);
+  max-height:3em;overflow:hidden}
+/* .clip is set by the renderer only when the text actually overflows, so a short
+   description is never dimmed for nothing */
+.tk .desc.clip::after{content:"";position:absolute;right:0;bottom:0;width:64px;height:1.5em;
+  background:linear-gradient(90deg,transparent,var(--card) 70%)}
+.tk .foot{display:flex;align-items:center;gap:8px;margin-top:10px}
+.tk .id{font:500 10px var(--mono);letter-spacing:.06em;color:var(--faint)}
+
+/* ONE quiet placeholder marker per card. What is actually coming is spelled out
+   in the drawer — the card only needs to say "not yet". */
+/* no border, no fill, same weight as the id it sits beside — a placeholder should
+   never outrank the title. */
+.ph{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:6px;
+  font:500 10px var(--mono);letter-spacing:.06em;color:var(--faint);
+  cursor:default;user-select:none}
+.ph::before{content:"";width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.55}
+
+/* One provisional treatment in the whole UI: a dashed hairline box. Nothing else
+   is dashed, hatched or striped. */
+.col-empty{border:1px dashed var(--line);border-radius:11px;padding:18px 12px;text-align:center;
+  font-size:12.5px;color:var(--faint);flex:none}
+/* the drop target exists only while a card is actually in flight */
+.col-drop{display:none;flex:none;border:1px dashed var(--teal-line);border-radius:11px;height:54px;
+  background:var(--teal-dim)}
+body.dragging .col-drop{display:block;animation:cardin var(--fast) var(--ease) both}
+body.dragging .col-empty{display:none}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(4,6,8,.72);backdrop-filter:blur(6px);
+  z-index:60;display:grid;place-items:center;padding:24px;animation:fade var(--fast) var(--ease)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{
+  width:min(560px,100%);background:var(--bg-2);border:1px solid var(--line-2);border-radius:16px;
+  box-shadow:var(--shadow-lg);padding:22px 24px 20px;animation:pop var(--slow) var(--ease)
+}
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.modal h2{margin:0 0 2px;font:650 19px var(--display);letter-spacing:-.02em}
+.modal .row{margin-top:14px}
+.modal .btns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:92px;padding:8px 10px;border-radius:9px;border:1px solid var(--line-2);
+  background:var(--bg-3);color:var(--mut);font:600 12px var(--mono);cursor:pointer;
+  transition:all var(--fast) var(--ease)}
+.seg button:hover{color:var(--ink);border-color:var(--line-2);background:var(--glass-2)}
+.seg button.on{background:var(--teal-dim);border-color:var(--teal-line);color:var(--teal)}
+
+/* ---------- detail drawer ---------- */
+/* the drawer gets the same backdrop as the modal, so it reads as on top of the
+   board rather than welded to it — and clicking the backdrop closes it. */
+.dscrim{position:fixed;inset:0;background:rgba(4,6,8,.55);backdrop-filter:blur(4px);
+  z-index:65;animation:fade var(--fast) var(--ease)}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(500px,100%);z-index:70;
+  background:var(--bg-2);border-left:1px solid var(--line-2);box-shadow:var(--shadow-lg);
+  display:flex;flex-direction:column;animation:slidein var(--slow) var(--ease)
+}
+@keyframes slidein{from{transform:translateX(28px);opacity:0}to{transform:none;opacity:1}}
+.drawer .dh{padding:20px 22px 16px;border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.drawer .db{padding:20px 22px 40px;overflow-y:auto;flex:1}
+.drawer h2{margin:6px 0 0;font:650 20px/1.25 var(--display);letter-spacing:-.02em}
+.drawer .body{white-space:pre-wrap;color:var(--mut);font-size:13.5px;margin:0}
+/* same single provisional treatment as .col-empty — dashed hairline, no hatch */
+.soon-block{border:1px dashed var(--line);border-radius:12px;padding:14px 16px;margin-top:12px;
+  background:var(--glass)}
+.soon-block .h{display:flex;align-items:center;gap:9px;font:600 13px var(--sans);color:var(--ink)}
+.soon-block .tagx{font:600 9px var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--faint);
+  border:1px solid var(--line-2);border-radius:20px;padding:2px 8px;margin-left:auto}
+.soon-block p{margin:7px 0 0;font-size:12.5px;color:var(--faint);line-height:1.55}
+.modes{display:grid;gap:8px;margin-top:10px}
+.mode{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);
+  border-radius:9px;background:var(--glass);font-size:12.5px;color:var(--mut)}
+.mode .mi{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex:none;
+  background:var(--glass-2);font:700 10px var(--mono);color:var(--faint)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;margin-top:12px}
+.kv dt{color:var(--faint);font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.kv dd{margin:0;color:var(--mut);font-family:var(--mono);font-size:12px}
+
+/* delete is a two-step: the destructive button only appears after you ask for it */
+.danger{margin-top:26px;border:1px solid var(--line);border-radius:12px;padding:13px 15px;
+  background:var(--glass);transition:border-color var(--fast) var(--ease),background var(--fast) var(--ease)}
+.danger.armed{border-color:rgba(255,122,114,.32);background:var(--red-dim)}
+.danger p{margin:0 0 11px;font-size:12.5px;color:var(--mut)}
+.danger .row2{display:flex;gap:9px;flex-wrap:wrap}
+
+/* ---------- toast ---------- */
+/* a failed write has to say so — silently snapping a card back reads as a bug */
+.toast{position:fixed;left:50%;bottom:26px;z-index:90;display:flex;align-items:center;gap:9px;
+  padding:11px 16px;border-radius:11px;background:var(--bg-3);border:1px solid var(--line-2);
+  box-shadow:var(--shadow-lg);color:var(--ink);font-size:13px;max-width:min(460px,90vw);
+  animation:toastin var(--slow) var(--ease) both}
+.toast.bad{border-color:rgba(255,122,114,.38)}
+.toast .tdot{width:7px;height:7px;border-radius:50%;background:var(--red);flex:none}
+.toast.out{animation:toastout var(--fast) var(--ease) both}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes toastout{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,10px)}}
+
+/* ======================================================================
+   EXISTING SECTIONS — restyled for the dark system
+   ====================================================================== */
+.tl{position:relative;margin:6px 0 0;padding-left:26px}
+.tl:before{content:"";position:absolute;left:9px;top:6px;bottom:6px;width:1px;background:var(--line-2)}
+.ev{position:relative;margin:0 0 14px;animation:cardin var(--slow) var(--ease)}
+.ev .node{position:absolute;left:-22px;top:3px;width:14px;height:14px;border-radius:50%;
+  border:3px solid var(--bg);background:var(--faint)}
+.ev.tl-teal .node{background:var(--teal);box-shadow:0 0 10px var(--teal-line)}
+.ev.tl-blue .node{background:var(--blue)}.ev.tl-amber .node{background:var(--amber)}
+.ev.tl-red .node{background:var(--red)}.ev.tl-grey .node{background:var(--faint)}
+.ev .t{font:600 13px var(--sans)}.ev .d{font-size:12.5px;color:var(--mut)}
+.diffwrap{border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:10px}
+.tabs{display:flex;gap:2px;background:var(--glass);border-bottom:1px solid var(--line);padding:6px 6px 0;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 11px;
+  font:600 12px var(--mono);color:var(--mut);cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--teal);border-bottom-color:var(--teal)}
+pre.diff{margin:0;padding:12px 13px;background:#06080a;overflow:auto;font:12px/1.55 var(--mono);
+  color:#aab6c2;max-height:280px}
+pre.diff .add{color:var(--teal);display:block}pre.diff .del{color:var(--red);display:block}
+pre.diff .hd{color:var(--blue);display:block}pre.diff .cx{display:block}
+.crit{display:flex;gap:9px;align-items:flex-start;padding:3px 0;font-size:13.5px}
+.mark{font:700 10px var(--mono);padding:2px 7px;border-radius:6px;margin-top:2px;white-space:nowrap}
+.mark.pass{background:var(--teal-dim);color:var(--teal)}
+.mark.fail{background:var(--red-dim);color:var(--red)}
+.mark.info{background:var(--glass-2);color:var(--mut)}
+.crit .ev2{color:var(--mut);font-family:var(--mono);font-size:12px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px}
+.metric .n{font:700 21px var(--mono);letter-spacing:-.02em}
+.metric .l{font-size:12px;color:var(--mut)}
+.traj{display:flex;align-items:flex-end;gap:6px;height:56px;margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left;font-family:var(--mono)}
+th{font:600 10px var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+tr.click{cursor:pointer;transition:background var(--fast) var(--ease)}
+tr.click:hover td{background:var(--glass-2)}
+.flag{background:var(--amber-dim);border-left:3px solid var(--amber);padding:11px 14px;
+  border-radius:9px;font-size:13.5px;margin-top:12px}
+.spin{color:var(--mut);font-size:13px;padding:22px 0;display:flex;align-items:center;gap:10px}
+.spin .s{width:14px;height:14px;border:2px solid var(--line-2);border-top-color:var(--teal);
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+details.pol{border:1px solid var(--line);border-radius:11px;padding:0 13px;margin-top:12px;background:var(--glass)}
+details.pol summary{cursor:pointer;padding:11px 0;font:600 13px var(--sans);color:var(--ink)}
+details.pol summary::marker{color:var(--faint)}
+.chkrow{display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 12px;align-items:center}
+.chk{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink)}
+.chk input{width:auto;accent-color:var(--teal)}
+svg .box{fill:var(--bg-2);stroke:var(--line-2);stroke-width:1}
+svg .box.core{fill:var(--teal-dim);stroke:var(--teal-line)}
+svg .box.gov{fill:var(--amber-dim);stroke:rgba(242,181,68,.35)}
+svg .lbl{font:600 12px var(--sans);fill:var(--ink)}
+svg .sub{font:11px var(--sans);fill:var(--mut)}
+svg .arr{stroke:var(--faint);stroke-width:1.2;fill:none;marker-end:url(#ah)}
+
+/* ---------- responsive ---------- */
+@media(max-width:980px){
+  .app{grid-template-columns:1fr}
+  aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+  /* width:100% is what makes the nav a column on desktop; without resetting it
+     the row direction here has no effect and the five buttons still stack. */
+  .nav{flex-direction:row;flex-wrap:wrap;gap:6px}
+  .nav button{width:auto}
+  .side-foot{display:none}
+  main{padding:22px 18px 60px}
+  .board{grid-template-columns:repeat(4,minmax(240px,1fr))}
+}
+
+/* ---------- motion preference ---------- */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important}
+  .tk:hover{transform:none}
+  .board-head::before{display:none}
+}

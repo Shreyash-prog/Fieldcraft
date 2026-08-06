@@ -23,10 +23,12 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from fieldcraft_loop import github_source, sandbox
 from fieldcraft_loop.engine import Engine, TERMINAL
+from fieldcraft_loop.ticket_store import STATUSES, TicketStore
 from . import auth as auth_mod
 from .config import settings
 from .ledger import Ledger
@@ -60,6 +62,7 @@ ledger = Ledger(DATA / "ledger.db", global_cap=settings.daily_cost_cap_usd,
                 rate_per_hour=settings.briefs_per_hour)
 conc = Concurrency(settings.max_concurrent)
 auth = auth_mod.from_env(DATA)
+tickets = TicketStore(DATA / "tickets.db")
 
 app = FastAPI(title="Fieldcraft POC")
 app.add_middleware(CORSMiddleware,
@@ -256,6 +259,65 @@ def submit_review(brief_id: str, req: ReviewReq, user: str = Depends(require_ses
     return {"ok": True}
 
 
+# --- board tickets ----------------------------------------------------------
+class CreateTicket(BaseModel):
+    title: str
+    description: str = ""
+    status: str = "backlog"
+
+
+class PatchTicket(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+
+
+def _check_status(status: str | None) -> None:
+    if status is not None and status not in STATUSES:
+        raise HTTPException(400, f"status must be one of {', '.join(STATUSES)}")
+
+
+def _owned_ticket(tid: str, user: str) -> dict:
+    """This tenant's ticket, or 404 — never 403, which would confirm it exists."""
+    t = tickets.get(tid, user)
+    if not t:
+        raise HTTPException(404, "unknown ticket")
+    return t
+
+
+@app.post("/api/tickets")
+def create_ticket(req: CreateTicket, user: str = Depends(require_session)):
+    if not req.title.strip():
+        raise HTTPException(400, "title is required")
+    _check_status(req.status)
+    return tickets.create(user, req.title, req.description, req.status)
+
+
+@app.get("/api/tickets")
+def list_tickets(user: str = Depends(require_session)):
+    return {"tickets": tickets.list_for(user), "statuses": list(STATUSES)}
+
+
+@app.get("/api/tickets/{tid}")
+def get_ticket(tid: str, user: str = Depends(require_session)):
+    return _owned_ticket(tid, user)
+
+
+@app.patch("/api/tickets/{tid}")
+def patch_ticket(tid: str, req: PatchTicket, user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    if req.title is not None and not req.title.strip():
+        raise HTTPException(400, "title cannot be empty")
+    _check_status(req.status)
+    return tickets.update(tid, user, **req.model_dump(exclude_unset=True))
+
+
+@app.delete("/api/tickets/{tid}")
+def delete_ticket(tid: str, user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    return {"ok": tickets.delete(tid, user)}
+
+
 @app.get("/api/tasks")
 def list_tasks(user: str = Depends(require_session)):
     out = [{"name": n, "kind": k} for n, (_, k) in TASKS.items()]
@@ -433,3 +495,8 @@ async def stream(bid: str, user: str = Depends(require_session)):
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+# The SPA shell and its stylesheet are public, like index.html itself; every API
+# route behind them still requires a session.
+app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
