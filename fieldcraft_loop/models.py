@@ -18,9 +18,10 @@ class State(str, Enum):
     CHANGES_REQUESTED = "changes_requested"
     DONE = "done"
     NEEDS_HUMAN = "needs_human"
+    ERROR = "error"          # the loop itself failed (a crashed worker, not a bad diff)
 
 
-TERMINAL = {State.DONE, State.NEEDS_HUMAN}
+TERMINAL = {State.DONE, State.NEEDS_HUMAN, State.ERROR}
 
 
 @dataclass

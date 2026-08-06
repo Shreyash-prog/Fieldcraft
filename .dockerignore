@@ -1,9 +1,17 @@
+# Keep `COPY . .` clean. Never exclude a fieldcraft_* package, a task directory
+# (sample_task/, tasks/, repo_tasks/ — including their .md acceptance criteria and
+# NOTES, which adapters read at runtime), or fieldcraft_web/static.
 __pycache__/
 *.pyc
-out/
-.venv/
+*.pyo
 .git/
+.github/
+out/
+*.db*
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+node_modules/
+.fc/
 .DS_Store
-tools/
-docs/
-*.md

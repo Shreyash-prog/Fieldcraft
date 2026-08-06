@@ -14,6 +14,7 @@ but says so on /healthz — see `auth.py` for the (narrow) claim being made.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import uuid
@@ -30,6 +31,8 @@ from . import auth as auth_mod
 from .config import settings
 from .ledger import Ledger
 from .limits import Concurrency
+
+log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("FC_DATA_DIR", ROOT / "out" / "web"))
@@ -89,14 +92,27 @@ def _settle(r: dict | None) -> None:
 
 
 def _drive(bid: str, gated: bool):
-    """Run advance() in the background; settle cost + release the slot at the end."""
+    """Run advance() in the background; settle cost + release the slot at the end.
+
+    The worker owns the run's liveness: if advance() raises (a missing package, a
+    bad task dir, anything), the run is marked `error` with the message on the
+    timeline and its reservation is settled. A thrown exception here used to kill
+    the thread silently and leave the brief stuck on "running" forever.
+    """
     def run():
+        r = None
         try:
             r = engine.advance(bid)
+        except Exception as e:                    # never let a worker die quietly
+            log.exception("run %s failed in the background worker", bid)
+            r = engine.fail(bid, f"{type(e).__name__}: {e}")
         finally:
             if gated:
                 conc.release()
-        _settle(r)
+        try:
+            _settle(r)                            # don't strand the reservation
+        except Exception:                         # pragma: no cover - ledger is local
+            log.exception("could not settle the reservation for run %s", bid)
     threading.Thread(target=run, daemon=True).start()
 
 

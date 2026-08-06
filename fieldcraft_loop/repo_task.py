@@ -109,10 +109,28 @@ def _num(pat: str, s: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+_PYTEST_CONFIGS = ("pytest.ini", "pyproject.toml", "tox.ini", "setup.cfg")
+
+
+def _ambient_config_guard(workdir: Path, cmd: list[str]) -> list[str]:
+    """pytest reads config from the nearest ancestor of the workdir that has one.
+    When the workdir brings no config of its own, that ancestor might be *ours*
+    (FC_DATA_DIR inside the project), and its `addopts = -q` stacks with the
+    command's `-q` into `-qq` — which drops the "N passed" line we parse, so a
+    passing suite reads as 0/0 and the run never converges. Neutralise it, but
+    only then: a connected repo with its own config must keep using it.
+    """
+    if not any("pytest" in part for part in cmd) or "-o" in cmd:
+        return []
+    if any((workdir / f).exists() for f in _PYTEST_CONFIGS):
+        return []
+    return ["-o", "addopts="]
+
+
 def run_tests(workdir: Path, cmd: list[str], timeout: int = 120) -> tuple[int, int, list[str]]:
     """Run the task's test command in the sandbox (see `sandbox.run_sandboxed` for
     what that does and does not guarantee). A timeout is a failed verdict."""
-    res = run_sandboxed(cmd, workdir, timeout=timeout)
+    res = run_sandboxed([*cmd, *_ambient_config_guard(workdir, cmd)], workdir, timeout=timeout)
     if res.timed_out:
         return 0, 0, ["<timeout>"]
     out = res.output

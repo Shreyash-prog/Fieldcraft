@@ -150,6 +150,19 @@ class Engine:
             self.runs.update(bid, status="awaiting_review")
             return self.runs.get(bid)
 
+    def fail(self, bid: str, message: str) -> dict | None:
+        """Mark a run failed because the loop itself broke (an exception in the
+        driving worker, e.g. a missing package), rather than because the agent
+        produced a bad diff. Recorded as an event so the timeline and the audit
+        log both show it, and the run leaves 'running' so nothing hangs."""
+        r = self.runs.get(bid)
+        if not r or r["status"] in TERMINAL:
+            return r
+        self.events.append(bid, r["iteration"], State.ERROR, "error",
+                           {"message": str(message)[:500]})
+        self.runs.update(bid, status="error")
+        return self.runs.get(bid)
+
     def submit_review(self, bid: str, kind: str, comment: str = "",
                       user_id: str | None = None) -> dict | None:
         """Record a human decision. Returns the run; if it became runnable

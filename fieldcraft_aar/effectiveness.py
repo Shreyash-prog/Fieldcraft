@@ -29,7 +29,13 @@ def run_pytest(workdir: Path) -> tuple[int, int, bool]:
     FC_PYTEST_TIMEOUT_S. A timeout counts as a failed verification, not a crash."""
     timeout = int(os.environ.get("FC_PYTEST_TIMEOUT_S", "60"))
     res = run_sandboxed(
-        [sys.executable, "-m", "pytest", "-q", "--tb=no", "-p", "no:cacheprovider"],
+        # `-o addopts=` and the explicit "." isolate this from any pytest.ini in an
+        # *ancestor* of the workdir (this repo's own, once FC_DATA_DIR points inside
+        # the project). Without it our `-q` stacks with the ini's `-q` into `-qq`,
+        # which drops the "N passed" summary line — verification then reads 0/0 and
+        # the run never converges. `testpaths` is the same hazard; "." overrides it.
+        [sys.executable, "-m", "pytest", "-q", "--tb=no", "-p", "no:cacheprovider",
+         "-o", "addopts=", "."],
         workdir, timeout=timeout)
     if res.timed_out:
         return 0, 0, False

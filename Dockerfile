@@ -10,11 +10,11 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# app
-COPY fieldcraft_aar ./fieldcraft_aar
-COPY fieldcraft_loop ./fieldcraft_loop
-COPY fieldcraft_web ./fieldcraft_web
-COPY sample_task ./sample_task
+# app — the whole project, not a hand-picked subset. The Reports tab and the
+# guided/graph paths import fieldcraft_bench/measure/guide/gov/graph lazily, so a
+# per-package COPY list silently ships an image that only fails at runtime.
+# .dockerignore is what keeps this clean; tests/test_packages.py keeps it honest.
+COPY . .
 
 # durable data (SQLite event + brief history); mount a volume here in prod
 ENV FC_DATA_DIR=/data

@@ -284,7 +284,8 @@ const EVMETA={
   turn_start:['blue','Agent working','$0'], turn_done:['teal','Agent turn',''],
   verdict:['teal','Verified',''], policy:['red','Policy check',''],
   changes_requested:['amber','Changes requested',''], human_comment:['grey','You commented',''],
-  approved:['teal','Approved',''], policy_stop:['red','Policy stop',''], needs_human:['red','Needs human','']
+  approved:['teal','Approved',''], policy_stop:['red','Policy stop',''], needs_human:['red','Needs human',''],
+  error:['red','Run failed','']
 };
 function evNode(e){
   const meta=EVMETA[e.type]; if(!meta) return '';
@@ -297,6 +298,7 @@ function evNode(e){
   else if(e.type==='changes_requested') d=`${(p.directives||[]).length} directive(s) → next turn`;
   else if(e.type==='human_comment') d=`"${esc(p.comment||'')}"`;
   else if(e.type==='approved') d=`by ${esc(p.by||'')}`;
+  else if(e.type==='error') d=esc(p.message||'the run failed');
   const it=e.turn>0?`<span class="muted mono" style="font-size:11px"> · iter ${e.turn}</span>`:'';
   return `<div class="ev tl-${meta[0]}"><div class="node"></div><div class="t">${meta[1]}${it}</div>${d?`<div class="d">${d}</div>`:''}</div>`;
 }

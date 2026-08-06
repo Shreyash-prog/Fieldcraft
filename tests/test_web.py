@@ -88,6 +88,41 @@ def test_sse_stream_completes():
                     state = d["status"]
     assert "verdict" in types and "approved" in types and state == "done"
 
+def test_worker_crash_surfaces_as_error_not_a_hang(monkeypatch):
+    """A background worker that raises (the production ModuleNotFoundError) must
+    leave the brief in `error` with the message on the timeline, never 'running'."""
+    from fieldcraft_web import server
+
+    def boom(bid):
+        raise ModuleNotFoundError("No module named 'fieldcraft_bench'")
+    monkeypatch.setattr(server.engine, "advance", boom)
+
+    bid = client.post("/api/briefs", json={"adapter": "mock", "review": "auto"}).json()["brief_id"]
+    for _ in range(40):
+        s = client.get(f"/api/briefs/{bid}").json()
+        if s["status"] in ("done", "needs_human", "error"):
+            break
+        time.sleep(0.1)
+    assert s["status"] == "error"
+    ev = client.get(f"/api/briefs/{bid}/events").json()["events"]
+    err = [e for e in ev if e["type"] == "error"]
+    assert err and "fieldcraft_bench" in err[0]["payload"]["message"]
+
+def test_worker_crash_does_not_strand_the_reservation(monkeypatch):
+    from fieldcraft_web import server
+
+    def boom(bid):
+        raise RuntimeError("worker died")
+    monkeypatch.setattr(server.engine, "advance", boom)
+
+    bid = client.post("/api/briefs", json={"adapter": "mock", "review": "auto"}).json()["brief_id"]
+    for _ in range(40):
+        if client.get(f"/api/briefs/{bid}").json()["status"] == "error":
+            break
+        time.sleep(0.1)
+    rid = server.engine.get(bid)["config"]["reservation_id"]
+    assert server.ledger.settle(rid, 1.0) is False      # already settled by the worker
+
 def test_policy_enforced_over_http():
     import time
     bid = client.post("/api/briefs", json={"task": "redact_pii", "adapter": "mock", "review": "auto",
