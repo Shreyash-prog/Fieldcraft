@@ -11,11 +11,12 @@ import difflib
 import json
 import re
 import shutil
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from fieldcraft_aar.models import Effectiveness
+
+from .sandbox import run_sandboxed
 
 _IGNORE = (".git", "__pycache__", ".pytest_cache")
 
@@ -109,11 +110,12 @@ def _num(pat: str, s: str) -> int:
 
 
 def run_tests(workdir: Path, cmd: list[str], timeout: int = 120) -> tuple[int, int, list[str]]:
-    try:
-        proc = subprocess.run(cmd, cwd=str(workdir), capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
+    """Run the task's test command in the sandbox (see `sandbox.run_sandboxed` for
+    what that does and does not guarantee). A timeout is a failed verdict."""
+    res = run_sandboxed(cmd, workdir, timeout=timeout)
+    if res.timed_out:
         return 0, 0, ["<timeout>"]
-    out = proc.stdout + proc.stderr
+    out = res.output
     passed, failed = _num(r"(\d+) passed", out), _num(r"(\d+) failed", out)
     failing = re.findall(r"FAILED (\S+)", out) or re.findall(r"(\S+) FAILED", out)
     return passed, passed + failed, failing

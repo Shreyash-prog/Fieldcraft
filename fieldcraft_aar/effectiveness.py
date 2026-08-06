@@ -10,9 +10,10 @@ import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
+
+from fieldcraft_loop.sandbox import run_sandboxed
 
 from .models import Effectiveness, CriterionVerdict
 
@@ -23,25 +24,21 @@ from .models import Effectiveness, CriterionVerdict
 def run_pytest(workdir: Path) -> tuple[int, int, bool]:
     """Run pytest in workdir. Returns (passed, total, all_pass).
 
-    Bounded by FC_PYTEST_TIMEOUT_S so agent-written code can't hang the process;
-    a timeout counts as a failed verification, not a crash."""
+    Goes through the one hardened execution path (`sandbox.run_sandboxed`): a
+    credential-free environment, resource limits, and a wall-clock bound from
+    FC_PYTEST_TIMEOUT_S. A timeout counts as a failed verification, not a crash."""
     timeout = int(os.environ.get("FC_PYTEST_TIMEOUT_S", "60"))
-    try:
-        proc = subprocess.run(
-            [sys.executable, "-m", "pytest", "-q", "--tb=no", "-p", "no:cacheprovider"],
-            cwd=str(workdir),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
+    res = run_sandboxed(
+        [sys.executable, "-m", "pytest", "-q", "--tb=no", "-p", "no:cacheprovider"],
+        workdir, timeout=timeout)
+    if res.timed_out:
         return 0, 0, False
-    out = proc.stdout + proc.stderr
+    out = res.output
     passed = _count(out, r"(\d+)\s+passed")
     failed = _count(out, r"(\d+)\s+failed")
     errors = _count(out, r"(\d+)\s+error")
     total = passed + failed + errors
-    all_pass = proc.returncode == 0 and failed == 0 and errors == 0 and passed > 0
+    all_pass = res.returncode == 0 and failed == 0 and errors == 0 and passed > 0
     return passed, total, all_pass
 
 

@@ -8,11 +8,28 @@ Legend: **P0** = must exist before any real/untrusted connection is wired. **P1*
 
 ## P0 — prerequisites for the vision
 
-### P0-1 · Sandboxed, credential-free code execution
-- **Where:** `fieldcraft_loop/repo_task.py:run_tests`, `fieldcraft_aar/effectiveness.py:run_pytest` — both `subprocess.run(cmd, cwd=workdir)` with only a timeout.
-- **Problem:** agent-authored code is executed with no isolation (no container/microVM, no filesystem/network/user isolation), in a process that holds `ANTHROPIC_API_KEY` in its environment. Executed code can read env, open sockets, and exfiltrate.
-- **Current exposure:** low (mock, local, trusted tasks). **Vision:** existential — running untrusted repos or credentialed tasks unsandboxed = customer breach.
-- **Remediation:** move execution into a disposable, network-egress-controlled sandbox (gVisor/Firecracker or a locked-down container) with **no ambient credentials**; inject secrets only via short-lived brokered tokens, never process env.
+### P0-1 · Sandboxed, credential-free code execution — **PARTIALLY ADDRESSED**
+*In-container hardening is done; true isolation (microVM / isolated Machine per run) is still pending.*
+
+- **Where:** all test/build execution now goes through one chokepoint, `fieldcraft_loop/sandbox.py:run_sandboxed`. `repo_task.py:run_tests` and `effectiveness.py:run_pytest` call it and nothing else calls `subprocess` for task code.
+- **Original problem:** agent-authored code ran with no isolation in a process holding `ANTHROPIC_API_KEY`. Since the "connect a public GitHub repo" feature, the code being run can also be a stranger's.
+
+**What `run_sandboxed` now guarantees** (single container, one Fly Machine):
+- **Credential-free child.** The environment is *built from an allowlist* (PATH, locale, TZ/TERM) plus a private HOME/TMPDIR — `os.environ` is never inherited. `ANTHROPIC_API_KEY`, every `FC_*`/`AWS_*`/`*_KEY`/`*_TOKEN`/`*_SECRET`, and all proxy variables are absent by construction; a caller-supplied `env_extra` is filtered by the same check. Proven by test: planted secrets in the parent do not appear in the child.
+- **Resource limits** (POSIX) via `preexec_fn`: `RLIMIT_CPU`, `RLIMIT_AS`, `RLIMIT_FSIZE`, `RLIMIT_CORE` (=0), and `RLIMIT_NPROC` **on Linux only** (it is per-UID, so on a dev machine it would count the developer's own processes). Configurable: `FC_SANDBOX_CPU_S`, `FC_SANDBOX_MEM_MB`, `FC_SANDBOX_NPROC`, `FC_SANDBOX_FSIZE_MB`.
+- **Honest reporting of limits.** The child reports which limits it actually set back over a pipe; `SandboxResult.limits` and `GET /healthz` (`sandbox_limits`) publish that per machine, because platforms differ — macOS refuses `RLIMIT_AS`, so on a Mac the memory cap is *not* in force and says so rather than being assumed.
+- **Wall-clock timeout that kills the process group** (`start_new_session=True` + `killpg`), so children outliving their parent are killed too. Proven by test.
+- **argv only.** A shell string is rejected; `shell=True` is never used, so metacharacters in commands or filenames are inert. Proven by test.
+- **Graceful non-POSIX fallback:** on Windows the environment stripping and timeout still apply and a warning is logged that resource limits were skipped.
+
+**What it explicitly does NOT guarantee** — do not rely on these:
+- **No filesystem isolation.** `cwd` is the workdir and HOME/TMPDIR are a private scratch dir, but the child runs as the *same OS user* and can read/write anything that user can (including the app's SQLite files). Real confinement needs a mount namespace or a separate machine.
+- **No network isolation.** The child can open sockets and reach the internet. Nothing in-container blocks egress; we only guarantee it carries none of our credentials or proxy config. **Do not describe the sandbox as network-isolated.**
+- **No protection against a determined escape.** rlimits and a stripped environment raise the cost of accidents and casual misbehaviour. They are not a security boundary against an attacker who is trying.
+- **Limits are per-process.** N concurrent runs can each consume the full memory limit; only `FC_MAX_CONCURRENT` bounds the total.
+- **Out of scope, still unsandboxed:** the `claude` CLI invocations (`fieldcraft_loop/live_adapter.py`, `repo_adapters.py:RepoLiveAdapter`, `fieldcraft_aar/adapters.py`) run *with* ambient credentials by design — that is the agent, not the agent's output. Our own `git clone` (`github_source.py`) and `git rev-parse` (`fieldcraft_guide/bootstrap.py`) are also outside this path.
+
+- **Remaining work (still P0):** run each execution on a disposable, network-egress-controlled **isolated Fly Machine** (or gVisor/Firecracker), with filesystem confinement and secrets injected only via short-lived brokered tokens. Until then, treat a connected repo's test suite as untrusted code with internet access running as the app user.
 
 ### P0-2 · Authentication + tenant isolation
 - **Where:** `fieldcraft_web/server.py` — zero auth (`grep Depends/Authorization` = 0); `FC_CORS_ORIGINS` defaults to `*`. No `org_id`/`user_id` in the data model; one global `events`/`runs` table and one global report cache.

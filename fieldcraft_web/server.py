@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from fieldcraft_loop import github_source
+from fieldcraft_loop import github_source, sandbox
 from fieldcraft_loop.engine import Engine, TERMINAL
 from .config import settings
 from .limits import RateLimiter, CostTracker, Concurrency
@@ -96,7 +96,9 @@ def client_ip(request: Request) -> str:
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "active_runs": conc.active,
-            "daily_cost_remaining": cost.remaining(settings.daily_cost_cap_usd)}
+            "daily_cost_remaining": cost.remaining(settings.daily_cost_cap_usd),
+            # which sandbox limits this machine really applies — see sandbox.py
+            "sandbox_limits": list(sandbox.effective_limits())}
 
 
 @app.post("/api/briefs")
