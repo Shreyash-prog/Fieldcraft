@@ -31,11 +31,27 @@ Legend: **P0** = must exist before any real/untrusted connection is wired. **P1*
 
 - **Remaining work (still P0):** run each execution on a disposable, network-egress-controlled **isolated Fly Machine** (or gVisor/Firecracker), with filesystem confinement and secrets injected only via short-lived brokered tokens. Until then, treat a connected repo's test suite as untrusted code with internet access running as the app user.
 
-### P0-2 · Authentication + tenant isolation
-- **Where:** `fieldcraft_web/server.py` — zero auth (`grep Depends/Authorization` = 0); `FC_CORS_ORIGINS` defaults to `*`. No `org_id`/`user_id` in the data model; one global `events`/`runs` table and one global report cache.
-- **Problem:** anyone reaching the URL can start runs, spend, and read every brief/event. No isolation between customers.
-- **Current exposure:** low if deployed with `FC_ALLOW_LIVE=0` + locked CORS. **Vision:** existential — the platform is inherently multi-customer.
-- **Remediation:** add identity (auth) and a tenant column threaded through every query and cache key. Make this a **data-model decision before** platform work; retrofitting tenancy is painful.
+### P0-2 · Authentication + tenant isolation — **ADDRESSED for single-operator multi-user**
+*Enterprise identity (SSO/OIDC), RBAC, and org-level tenancy are still future work.*
+
+- **Where:** `fieldcraft_web/auth.py` (sessions + tenant key), `fieldcraft_web/server.py` (the `require_session` dependency and per-tenant scoping), `fieldcraft_loop/run_store.py` (`user_id` column).
+
+**What exists now:**
+- **Invite-code sessions.** An operator sets `FC_INVITE_CODES` (comma-separated); `POST /api/session` exchanges a code for a signed, expiring cookie. Signing is `itsdangerous.URLSafeTimedSerializer` with `FC_SECRET_KEY`; code comparison is `hmac.compare_digest` over every configured code with no early exit. No hand-rolled crypto, and codes/keys are never logged or echoed.
+- **Every API route that reads or changes state requires a session** (`require_session`): `/api/briefs` (create/list/get/events/pending/stream/review), `/api/repos/connect`, `/api/tasks`, `/api/reports/*`. Only `GET /` (the SPA shell), `/healthz`, and `POST /api/session` are public.
+- **A tenant column, threaded through.** `runs.user_id` (indexed) with `user_id` on `RunStore.create/get/list_all/list_status` and on `Engine.create/get/get_events/pending/submit_review`. A user_id is `hmac(server_salt, code)`, so the same code keeps its data across restarts and two codes are two tenants; the salt is generated per deployment and persisted next to the databases.
+- **Cross-tenant access 404s, never 403** — the reads are filtered in SQL, so another user's brief is simply not there and its existence never leaks. Events are gated by the run's ownership rather than duplicating the tenant onto every event row.
+- **Connected repos are per-tenant** (`CONNECTED[user_id][handle]`); the report cache stays shared *because* every report is computed from repo-bundled fixture tasks in a throwaway directory and contains no user data — reading one still needs a session.
+- **Migration.** `RunStore._migrate()` adds the column in place; pre-tenancy rows keep `user_id IS NULL`, are read as the reserved `legacy` tenant, and are therefore visible only in unauthenticated fallback mode.
+- **Fallback is loud, not silent.** With no codes configured the app stays open exactly as before (everyone is `legacy`), but logs a startup warning and reports `auth_enabled: false` on `/healthz`.
+
+**What this is not — do not oversell it:**
+- No email/OAuth/SSO/OIDC, no user directory, no account recovery. A code *is* the identity.
+- **No roles or permissions.** Every session has identical rights over its own data; there is no admin/read-only distinction.
+- **No per-session revocation.** Cutting off one holder means rotating that code (or `FC_SECRET_KEY`, which logs everyone out). Codes are bearer secrets — anyone they are forwarded to becomes that tenant.
+- **No org/team concept**, no per-tenant rate or spend accounting (limits are still global/per-IP), and no CSRF token (the cookie is `SameSite=Lax`, `HttpOnly`, and `Secure` behind https, which is the mitigation being relied on).
+- Tenancy covers runs, events, and connected repos. **Workdirs on disk are not separated by user**, and the sandbox does not isolate them (see P0-1) — a test suite executing as the app user can still reach another tenant's workdir on disk.
+- **Remaining work:** real identity (OIDC/SSO), roles, org-level tenancy with a durable per-tenant quota, and filesystem separation of workdirs.
 
 ### P0-3 · Real scoped-credential backend
 - **Where:** `fieldcraft_gov/credentials.py` — `CredentialBroker` is an in-memory dict of capability strings; audit is an in-memory list lost on restart.

@@ -213,6 +213,39 @@ const el=id=>document.getElementById(id);
 const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 let BID=null, es=null;
 
+// ---------- access gate ----------
+// Any 401 from any call puts up the code prompt; a good code sets the session
+// cookie and reloads. Deliberately minimal — there is no login page, no account.
+const _fetch=window.fetch.bind(window);
+window.fetch=async(...a)=>{const r=await _fetch(...a); if(r.status===401) showGate(); return r;};
+function showGate(msg){
+  if(el('gate')){ if(msg) el('gateMsg').textContent=msg; return; }
+  const d=document.createElement('div'); d.id='gate';
+  d.style.cssText='position:fixed;inset:0;background:rgba(15,20,25,.75);display:flex;'+
+    'align-items:center;justify-content:center;z-index:99';
+  d.innerHTML='<div class="card" style="max-width:380px;width:90%">'+
+    '<p class="fam">Access code</p>'+
+    '<p class="muted" style="font-size:13px;margin-top:0">This deployment is invite-only. '+
+    'Enter the code you were given.</p>'+
+    '<input id="gateCode" type="password" placeholder="access code">'+
+    '<p class="muted" id="gateMsg" style="font-size:12px;min-height:16px;margin:6px 0"></p>'+
+    '<button class="act go" id="gateBtn">Enter</button></div>';
+  document.body.appendChild(d);
+  el('gateBtn').onclick=submitCode;
+  el('gateCode').onkeydown=e=>{if(e.key==='Enter') submitCode();};
+  el('gateCode').focus();
+  if(msg) el('gateMsg').textContent=msg;
+}
+async function submitCode(){
+  const code=el('gateCode').value;
+  el('gateBtn').disabled=true; el('gateMsg').textContent='checking…';
+  const r=await _fetch('/api/session',{method:'POST',headers:{'content-type':'application/json'},
+                                       body:JSON.stringify({code})});
+  if(r.ok){ location.reload(); return; }
+  el('gateBtn').disabled=false; el('gateCode').value='';
+  el('gateMsg').textContent=r.status===429?'too many attempts — wait a bit':'invalid code';
+}
+
 function nav(v){
   ['overview','run','history','reports'].forEach(x=>{
     el('v-'+x).classList.toggle('hide', x!==v); el('n-'+x).classList.toggle('on', x===v);});
@@ -273,7 +306,9 @@ function renderTimeline(target, events){
 
 // ---------- run (SSE) ----------
 async function loadTasks(){
-  const t=(await (await fetch('/api/tasks')).json()).tasks;
+  const r=await fetch('/api/tasks');
+  if(!r.ok) return;                     // 401 already raised the gate
+  const t=(await r.json()).tasks;
   el('task').innerHTML=t.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
 }
 function buildPolicy(){

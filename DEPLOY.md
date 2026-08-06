@@ -4,8 +4,33 @@ The service is hardened for a public deployment and containerized. It runs
 **offline by default** (mock agent + behavioral judge, `FC_ALLOW_LIVE=0`), so you
 can expose it with zero API spend; flip live mode on when you want the real agent.
 
+## Set these before you expose the app
+
+```bash
+fly secrets set FC_INVITE_CODES="a-long-random-code,another-for-a-second-user"
+fly secrets set FC_SECRET_KEY="$(openssl rand -hex 32)"
+```
+
+- `FC_INVITE_CODES` — comma-separated access codes. **Unset = the app is open to
+  anyone with the URL**, every visitor shares one `legacy` tenant, and `/healthz`
+  reports `auth_enabled: false` (the fallback is deliberate, but it is not a
+  deployment posture). Each distinct code is a distinct tenant: users only ever see
+  their own briefs, events, and connected repos.
+- `FC_SECRET_KEY` — signs the session cookie. Unset means a random key per boot, so
+  everyone is logged out on restart. Rotating it logs everyone out; rotating a code
+  revokes that one holder (there is no per-session revocation).
+- Treat codes as bearer secrets: anyone a code is forwarded to becomes that tenant.
+  Neither the codes nor the key are ever logged or returned by an endpoint.
+
+This is invite-code gating with per-user data isolation — **not** SSO, accounts, or
+roles. See HARDENING.md P0-2 for the precise claim.
+
 ## What's hardened
 
+- **Auth + tenant isolation** — every state-reading/-changing API route requires a signed
+  session cookie (`itsdangerous`, expiring, `HttpOnly`/`SameSite=Lax`/`Secure` behind https);
+  only the SPA shell, `/healthz`, and `POST /api/session` are public. Runs carry a `user_id`,
+  and another tenant's brief returns **404** rather than 403 so existence never leaks.
 - **Per-IP rate limiting** — `FC_BRIEFS_PER_HOUR` briefs per IP per rolling hour (429 over limit).
 - **Spend caps** — per-run budget clamp (`FC_MAX_BUDGET_PER_RUN_USD`) and a global
   `FC_DAILY_COST_CAP_USD` that pauses live runs once hit.
@@ -92,6 +117,9 @@ set the `FC_*` env vars.
 
 | Var | Default | Meaning |
 |---|---|---|
+| `FC_INVITE_CODES` | *(unset)* | comma-separated access codes; unset = **open deployment** |
+| `FC_SECRET_KEY` | *(random per boot)* | session-cookie signing key |
+| `FC_SESSION_TTL_S` | `604800` | session lifetime (7 days) |
 | `FC_ALLOW_LIVE` | `0` | enable claude/tool-use (needs `ANTHROPIC_API_KEY`) |
 | `FC_BRIEFS_PER_HOUR` | `10` | per-IP brief rate limit |
 | `FC_MAX_CONCURRENT` | `4` | simultaneous runs |

@@ -5,6 +5,11 @@ survives a restart and is resumed by whichever process is up. Background threads
 merely *drive* advance() (they hold no run state), so killing them loses at most
 the in-flight turn. Keeps the Phase-D hardening: rate limits, spend caps,
 concurrency guard, request clamps, health check, CORS.
+
+Every API route that reads or changes state requires a session and is scoped to
+that session's tenant (`auth.py`); only the SPA shell, /healthz and /api/session
+are public. With no invite codes configured the app stays open exactly as it was,
+but says so on /healthz — see `auth.py` for the (narrow) claim being made.
 """
 from __future__ import annotations
 
@@ -14,13 +19,14 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from fieldcraft_loop import github_source, sandbox
 from fieldcraft_loop.engine import Engine, TERMINAL
+from . import auth as auth_mod
 from .config import settings
 from .limits import RateLimiter, CostTracker, Concurrency
 
@@ -37,18 +43,37 @@ TASKS = {
     "textkit (multi-file repo)": (ROOT / "repo_tasks" / "textkit", "repo"),
 }
 
-# repo tasks built at runtime from a connected public GitHub repo: handle -> task dir
-CONNECTED: dict[str, Path] = {}
+# repo tasks built at runtime from a connected public GitHub repo, per tenant:
+# user_id -> handle -> task dir. Never shared across users.
+CONNECTED: dict[str, dict[str, Path]] = {}
 
 engine = Engine(DATA)
 rate = RateLimiter(settings.briefs_per_hour)
 cost = CostTracker()
 conc = Concurrency(settings.max_concurrent)
+auth = auth_mod.from_env(DATA)
 
 app = FastAPI(title="Fieldcraft POC")
 app.add_middleware(CORSMiddleware,
                    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
                    allow_methods=["*"], allow_headers=["*"])
+
+
+def require_session(request: Request) -> str:
+    """The caller's tenant. 401 when auth is on and the cookie is missing/invalid;
+    the reserved 'legacy' tenant when auth is disabled."""
+    uid = auth.current_user(request)
+    if uid is None:
+        raise auth_mod.unauthorized()
+    return uid
+
+
+def owned_run(bid: str, user: str) -> dict:
+    """A run this tenant owns, or 404 — never 403, which would confirm it exists."""
+    r = engine.get(bid, user)
+    if not r:
+        raise HTTPException(404, "unknown brief")
+    return r
 
 
 def _drive(bid: str, gated: bool):
@@ -88,6 +113,10 @@ class ReviewReq(BaseModel):
     comment: str = ""
 
 
+class SessionReq(BaseModel):
+    code: str
+
+
 def client_ip(request: Request) -> str:
     xff = request.headers.get("x-forwarded-for")
     return xff.split(",")[0].strip() if xff else (request.client.host if request.client else "?")
@@ -98,14 +127,38 @@ def healthz():
     return {"ok": True, "active_runs": conc.active,
             "daily_cost_remaining": cost.remaining(settings.daily_cost_cap_usd),
             # which sandbox limits this machine really applies — see sandbox.py
-            "sandbox_limits": list(sandbox.effective_limits())}
+            "sandbox_limits": list(sandbox.effective_limits()),
+            # false = no invite codes configured, so the deployment is open
+            "auth_enabled": auth.enabled}
+
+
+@app.post("/api/session")
+def create_session(req: SessionReq, request: Request, response: Response):
+    """Exchange an invite code for a signed, expiring session cookie."""
+    if not rate.allow("session:" + client_ip(request)):
+        raise HTTPException(429, "too many attempts from your IP, try later")
+    if not auth.enabled:
+        return {"ok": True, "auth_enabled": False, "user": auth_mod.LEGACY_USER}
+    uid = auth.user_for_code(req.code[:200])
+    if not uid:
+        raise HTTPException(401, "invalid access code")     # never echo the code
+    response.set_cookie(auth_mod.COOKIE, auth.issue(uid), max_age=auth.ttl_s,
+                        httponly=True, samesite="lax", secure=auth_mod.secure_cookie(request))
+    return {"ok": True, "auth_enabled": True, "user": uid}
+
+
+@app.delete("/api/session")
+def end_session(response: Response):
+    response.delete_cookie(auth_mod.COOKIE)
+    return {"ok": True}
 
 
 @app.post("/api/briefs")
-def create_brief(req: CreateBrief, request: Request):
+def create_brief(req: CreateBrief, request: Request, user: str = Depends(require_session)):
     if not rate.allow(client_ip(request)):
         raise HTTPException(429, "rate limit: too many briefs from your IP, try later")
-    connected = req.task in CONNECTED
+    mine = CONNECTED.get(user, {})
+    connected = req.task in mine
     if connected and (req.adapter != "mock" or req.grader == "tooluse"):
         raise HTTPException(403, "connected repos run with the offline mock agent only "
                                  "(adapter='mock', grader='behavioral')")
@@ -122,52 +175,50 @@ def create_brief(req: CreateBrief, request: Request):
     goal = ("Make the connected repository's test suite pass" if connected else
             "Implement redact_pii so all tests and acceptance criteria pass")
     cfg = {**req.model_dump(), "goal": goal}
-    task_dir = str(CONNECTED[req.task] if connected
+    task_dir = str(mine[req.task] if connected
                    else TASKS.get(req.task, (Path(TASK_DIR), "single"))[0])
-    bid = engine.create(cfg, task_dir)
+    bid = engine.create(cfg, task_dir, user)
     _drive(bid, gated=True)
     return {"brief_id": bid, "config": req.model_dump()}
 
 
 @app.get("/api/briefs/{brief_id}")
-def get_brief(brief_id: str):
-    r = engine.get(brief_id)
-    if not r:
-        raise HTTPException(404, "unknown brief")
+def get_brief(brief_id: str, user: str = Depends(require_session)):
+    r = owned_run(brief_id, user)
     return {"brief_id": brief_id, "status": r["status"],
             "awaiting_review": r["status"] == "awaiting_review",
             "aar": engine.aar(r) if r["status"] in TERMINAL else None}
 
 
 @app.get("/api/briefs/{brief_id}/events")
-def get_events(brief_id: str):
-    return {"events": engine.get_events(brief_id)}
+def get_events(brief_id: str, user: str = Depends(require_session)):
+    owned_run(brief_id, user)
+    return {"events": engine.get_events(brief_id, user)}
 
 
 @app.get("/api/briefs/{brief_id}/pending")
-def get_pending(brief_id: str):
-    return {"pending": engine.pending(brief_id)}
+def get_pending(brief_id: str, user: str = Depends(require_session)):
+    owned_run(brief_id, user)
+    return {"pending": engine.pending(brief_id, user)}
 
 
 @app.post("/api/briefs/{brief_id}/review")
-def submit_review(brief_id: str, req: ReviewReq):
-    r = engine.get(brief_id)
-    if not r:
-        raise HTTPException(404, "unknown brief")
+def submit_review(brief_id: str, req: ReviewReq, user: str = Depends(require_session)):
+    r = owned_run(brief_id, user)
     if r["status"] != "awaiting_review":
         raise HTTPException(409, "not awaiting review")
     if req.kind not in ("approve", "changes", "reject"):
         raise HTTPException(400, "kind must be approve | changes | reject")
-    after = engine.submit_review(brief_id, req.kind, req.comment[:2000])
+    after = engine.submit_review(brief_id, req.kind, req.comment[:2000], user)
     if after and after["status"] == "running":
         _drive(brief_id, gated=False)     # resume without gating (bounded by max_iterations)
     return {"ok": True}
 
 
 @app.get("/api/tasks")
-def list_tasks():
+def list_tasks(user: str = Depends(require_session)):
     out = [{"name": n, "kind": k} for n, (_, k) in TASKS.items()]
-    out += [{"name": n, "kind": "repo"} for n in CONNECTED]
+    out += [{"name": n, "kind": "repo"} for n in CONNECTED.get(user, {})]
     return {"tasks": out}
 
 
@@ -176,12 +227,13 @@ class ConnectRepo(BaseModel):
 
 
 @app.post("/api/repos/connect")
-def connect_repo(req: ConnectRepo, request: Request):
+def connect_repo(req: ConnectRepo, request: Request, user: str = Depends(require_session)):
     """Shallow-clone a public GitHub repo and turn it into a runnable repo task.
 
     Read-only and offline: nothing is pushed back, and no agent runs here — the
     caller starts a normal brief against the returned handle (mock adapter only,
-    so FC_ALLOW_LIVE is untouched by this path).
+    so FC_ALLOW_LIVE is untouched by this path). The handle is registered against
+    the caller's tenant only; another user never sees it.
     """
     if not rate.allow(client_ip(request)):
         raise HTTPException(429, "rate limit: too many requests from your IP, try later")
@@ -201,7 +253,7 @@ def connect_repo(req: ConnectRepo, request: Request):
     finally:
         conc.release()
 
-    CONNECTED[handle] = tdir
+    CONNECTED.setdefault(user, {})[handle] = tdir
     return {"task": handle, "adapter": "mock", "kind": "repo", "test_command": cmd,
             "protected_paths": github_source.DEFAULT_PROTECTED,
             "tests_detected": github_source.has_tests(info.path),
@@ -211,6 +263,10 @@ def connect_repo(req: ConnectRepo, request: Request):
 
 
 # --- differentiator reports (computed lazily on first request, then cached) ---
+# The cache is shared across tenants *on purpose*: every report is computed from
+# repo-bundled fixture tasks in a throwaway directory (see the four functions
+# below — none of them read the runs/events stores or any connected repo), so it
+# holds no user data. Reading one still requires a session.
 import dataclasses  # noqa: E402
 
 _REPORTS: dict = {}
@@ -278,7 +334,7 @@ def _compute_report(kind: str):
 
 
 @app.get("/api/reports/{kind}")
-def get_report(kind: str):
+def get_report(kind: str, user: str = Depends(require_session)):
     if kind not in _REPORT_FNS:
         raise HTTPException(404, "unknown report")
     r = _REPORTS.get(kind)
@@ -290,9 +346,9 @@ def get_report(kind: str):
 
 
 @app.get("/api/briefs")
-def list_briefs():
+def list_briefs(user: str = Depends(require_session)):
     out = []
-    for r in engine.runs.list_all():
+    for r in engine.runs.list_all(user_id=user):
         cfg = r["config"]; td = cfg.get("task_dir", "")
         out.append({"brief_id": r["brief_id"], "status": r["status"],
                     "iteration": r["iteration"], "cost": round(r["total_cost"], 4),
@@ -307,13 +363,14 @@ def _sse(event: str, data) -> str:
 
 
 @app.get("/api/briefs/{bid}/stream")
-async def stream(bid: str):
+async def stream(bid: str, user: str = Depends(require_session)):
     import asyncio
+    owned_run(bid, user)                            # 404 before a byte is streamed
 
     async def gen():
         seen = 0
         for _ in range(2400):                       # ~12 min ceiling
-            r = engine.get(bid)
+            r = engine.get(bid, user)
             if not r:
                 yield _sse("state", {"status": "error"}); return
             ev = engine.get_events(bid)

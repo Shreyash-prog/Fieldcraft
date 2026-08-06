@@ -20,7 +20,7 @@ from fieldcraft_aar.effectiveness import BehavioralGrader, compute_effectiveness
 
 from . import feedback as fb
 from .models import State
-from .run_store import RunStore
+from .run_store import LEGACY_USER, RunStore
 from .store import EventStore
 
 TERMINAL = {"done", "needs_human", "error"}
@@ -34,7 +34,7 @@ class Engine:
         self.runs = RunStore(self.dir / "runs.db")
 
     # -- lifecycle ---------------------------------------------------------
-    def create(self, config: dict, task_dir: str) -> str:
+    def create(self, config: dict, task_dir: str, user_id: str = LEGACY_USER) -> str:
         from .task import Task
         bid = "BRIEF-" + uuid.uuid4().hex[:6]
         wd = self.dir / "work" / bid
@@ -58,7 +58,7 @@ class Engine:
                 shutil.copy2(Path(task_dir) / f, wd / f)
             config = {**config, "task_dir": str(task_dir), "kind": "single",
                       "module": task.module, "criteria_file": task.criteria_file}
-        self.runs.create(bid, config, str(wd))
+        self.runs.create(bid, config, str(wd), user_id)
         self.events.append(bid, 0, State.DRAFT, "created", {"goal": config.get("goal", "")})
         self.events.append(bid, 0, State.READY, "ready", {})
         return bid
@@ -150,10 +150,12 @@ class Engine:
             self.runs.update(bid, status="awaiting_review")
             return self.runs.get(bid)
 
-    def submit_review(self, bid: str, kind: str, comment: str = "") -> dict | None:
+    def submit_review(self, bid: str, kind: str, comment: str = "",
+                      user_id: str | None = None) -> dict | None:
         """Record a human decision. Returns the run; if it became runnable
-        ('changes'), the caller drives advance() (possibly in the background)."""
-        r = self.runs.get(bid)
+        ('changes'), the caller drives advance() (possibly in the background).
+        Pass user_id to make a run owned by anyone else a no-op."""
+        r = self.runs.get(bid, user_id)
         if not r or r["status"] != "awaiting_review":
             return r
         it, cfg = r["iteration"], r["config"]
@@ -187,12 +189,20 @@ class Engine:
         return self.runs.get(bid)
 
     # -- views -------------------------------------------------------------
-    def get(self, bid): return self.runs.get(bid)
+    # Views take an optional user_id: pass one and a run owned by anyone else is
+    # invisible (the caller then 404s, so ownership never leaks existence).
+    # Events are gated by the run's ownership rather than duplicating the tenant
+    # onto every event row — one owner, checked in one place.
+    def get(self, bid, user_id: str | None = None):
+        return self.runs.get(bid, user_id)
 
-    def get_events(self, bid): return self.events.events(bid)
+    def get_events(self, bid, user_id: str | None = None):
+        if user_id is not None and not self.runs.get(bid, user_id):
+            return []
+        return self.events.events(bid)
 
-    def pending(self, bid) -> dict | None:
-        r = self.runs.get(bid)
+    def pending(self, bid, user_id: str | None = None) -> dict | None:
+        r = self.runs.get(bid, user_id)
         if not r or r["status"] != "awaiting_review" or not r["last_verdict"]:
             return None
         v = r["last_verdict"]
