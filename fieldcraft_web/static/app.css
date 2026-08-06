@@ -296,6 +296,43 @@ body.dragging .col-empty{display:none}
 .drawer .db{padding:20px 22px 40px;overflow-y:auto;flex:1}
 .drawer h2{margin:6px 0 0;font:650 20px/1.25 var(--display);letter-spacing:-.02em}
 .drawer .body{white-space:pre-wrap;color:var(--mut);font-size:13.5px;margin:0}
+/* ---------- ticket context (A2) ----------
+   These two sections are wired, so they get a SOLID border. Dashed stays
+   reserved for the not-yet-built placeholders underneath them — the border
+   alone tells you which half of the drawer actually does something. */
+.ctx-block{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:12px;
+  background:var(--glass)}
+.ctx-block .h{display:flex;align-items:center;gap:9px;font:600 13px var(--sans);color:var(--ink);
+  margin-bottom:10px}
+.ctx-block .hint{margin:0 0 10px;font-size:12.5px;color:var(--faint);line-height:1.55}
+.ctx-row{display:flex;gap:8px;align-items:center}
+.ctx-row input{flex:1;min-width:0}
+.ctx-err{margin:10px 0 0;font:12px/1.5 var(--mono);color:var(--red)}
+.ctx-note{margin:10px 0 0;font:11.5px/1.5 var(--mono);color:var(--faint)}
+
+/* a connected repo, once it is real */
+.repo{padding:11px 12px;border:1px solid var(--teal-line);border-radius:10px;background:var(--teal-dim)}
+.repo .rn{font:600 13.5px var(--sans);color:var(--ink);word-break:break-all}
+.repo .rf{margin-top:4px;font:11.5px/1.7 var(--mono);color:var(--mut)}
+.repo .rf b{color:var(--teal);font-weight:600}
+.repo .rf .no{color:var(--amber)}
+
+/* attached documents */
+.docs{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.doc{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);
+  border-radius:10px;background:var(--bg-3)}
+.doc .dn{flex:1;min-width:0;font-size:13px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc .dm{flex:none;font:11px var(--mono);color:var(--faint)}
+/* dashed here matches the board's .col-drop — a drop target, same language */
+.drop{display:block;border:1px dashed var(--line-2);border-radius:10px;padding:15px 12px;
+  text-align:center;cursor:pointer;color:var(--mut);font-size:12.5px;
+  transition:border-color var(--fast) var(--ease),background var(--fast) var(--ease),
+             color var(--fast) var(--ease)}
+.drop:hover,.drop.over{border-color:var(--teal-line);background:var(--teal-dim);color:var(--teal)}
+.drop input{display:none}
+.drop.busy{opacity:.55;pointer-events:none}
+
 /* same single provisional treatment as .col-empty — dashed hairline, no hatch */
 .soon-block{border:1px dashed var(--line);border-radius:12px;padding:14px 16px;margin-top:12px;
   background:var(--glass)}

@@ -38,6 +38,13 @@ class Settings:
     max_iterations_cap = _int("FC_MAX_ITERATIONS", 6)
     # kill a test subprocess that runs too long (sandbox safety)
     pytest_timeout_s = _int("FC_PYTEST_TIMEOUT_S", 30)
+    # --- ticket context (A2): repo + PDFs attached to a ticket ---
+    # biggest single PDF accepted as ticket context
+    max_pdf_mb = _float("FC_MAX_PDF_MB", 10.0)
+    # how many PDFs one ticket may carry
+    max_pdfs_per_ticket = _int("FC_MAX_PDFS_PER_TICKET", 10)
+    # page ceiling per PDF (bounds extraction time and stored text)
+    max_pdf_pages = _int("FC_MAX_PDF_PAGES", 200)
     # allow the live agent / judge (needs a key); off => mock+behavioral only
     allow_live = os.environ.get("FC_ALLOW_LIVE", "1") == "1"
     # comma-separated allowed CORS origins ("*" for any)

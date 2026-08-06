@@ -359,14 +359,13 @@ function openTicket(id){
       <dl class="kv"><dt>created</dt><dd>${new Date(t.created_at*1000).toLocaleString()}</dd>
         <dt>updated</dt><dd>${new Date(t.updated_at*1000).toLocaleString()}</dd></dl>
 
+      <p class="fam" style="margin-top:24px">Context</p>
+      <div class="ctx-block"><div class="h">◆ Connected repository</div>
+        <div id="repoBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
+      <div class="ctx-block"><div class="h">▤ PDF context</div>
+        <div id="pdfBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
+
       <p class="fam" style="margin-top:24px">Coming in the run phase</p>
-      <div class="soon-block"><div class="h">◆ Connected repository<span class="tagx">not wired</span></div>
-        <p>Point this ticket at a public GitHub repo. The connect endpoint already exists
-           (<span class="mono">/api/repos/connect</span>); the ticket keeps
-           <span class="mono">repo_url</span> and <span class="mono">repo_task_handle</span> for it.</p></div>
-      <div class="soon-block"><div class="h">▤ PDF context<span class="tagx">not wired</span></div>
-        <p>Attach specs and design docs as context for the agent. Stored against
-           <span class="mono">pdf_context_ids</span>.</p></div>
       <div class="soon-block"><div class="h">✦ Obsidian brain<span class="tagx">not wired</span></div>
         <p>A linked knowledge base the loop reads from and writes learnings back into.</p></div>
       <div class="soon-block"><div class="h">▶ Three-mode comparison<span class="tagx">not wired</span></div>
@@ -389,6 +388,124 @@ function openTicket(id){
   el('dwSeg').addEventListener('click',async e=>{const b=e.target.closest('button'); if(!b)return;
     await moveTicket(t.id,b.dataset.s);
     el('dwSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
+  loadRepo(t.id); loadPdfs(t.id);            // the two wired context sections
+}
+
+// ---------- ticket context: connected repo (A2) ----------
+// Attaches only. Nothing here runs an agent against the repo — that is A3.
+const errLine=m=>`<p class="ctx-err">✗ ${esc(m)}</p>`;
+function ctxErr(id,msg){const b=el(id); if(!b) return;
+  b.querySelectorAll('.ctx-err').forEach(x=>x.remove());
+  b.insertAdjacentHTML('beforeend', errLine(msg));}
+
+async function loadRepo(tid){
+  if(!el('repoBody')) return;
+  const r=await fetch(`/api/tickets/${tid}/repo`);
+  if(!r.ok) return;
+  if(el('repoBody')) renderRepo(tid,(await r.json()).repo);
+}
+function renderRepo(tid,repo){
+  const body=el('repoBody'); if(!body) return;
+  if(!repo){
+    body.innerHTML=`<p class="hint">Point this ticket at a <b>public</b> GitHub repo.
+        Shallow-cloned read-only, size-capped and timed out — nothing is written back.</p>
+      <div class="ctx-row">
+        <input id="repoIn" placeholder="https://github.com/owner/repo" autocomplete="off">
+        <button class="act go" id="repoBtn" style="white-space:nowrap">Connect</button></div>`;
+    el('repoBtn').onclick=()=>connectRepoToTicket(tid);
+    el('repoIn').onkeydown=e=>{if(e.key==='Enter') connectRepoToTicket(tid);};
+    return;
+  }
+  const tests=repo.has_tests?'<b>yes</b>':'<span class="no">none found</span>';
+  body.innerHTML=`<div class="repo">
+      <div class="rn">${esc(repo.owner)}/${esc(repo.name)}</div>
+      <div class="rf">@ ${esc(repo.default_branch)} · ${repo.file_count} files ·
+        ${repo.size_mb} MB · tests: ${tests}</div></div>
+    <p class="ctx-note">${esc((repo.test_command||[]).join(' '))}</p>
+    <div class="ctx-row" style="margin-top:10px">
+      <button class="act ghost" id="repoOff">Disconnect</button></div>`;
+  el('repoOff').onclick=()=>disconnectRepoFromTicket(tid);
+}
+async function connectRepoToTicket(tid){
+  const url=(el('repoIn').value||'').trim();
+  if(!url){ ctxErr('repoBody','enter a public https://github.com/<owner>/<repo> URL'); return; }
+  const btn=el('repoBtn'); btn.disabled=true; btn.textContent='Cloning…';
+  el('repoBody').querySelectorAll('.ctx-err').forEach(x=>x.remove());
+  let r,d;
+  try{
+    r=await fetch(`/api/tickets/${tid}/repo`,{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify({url})});
+    d=await r.json();
+  }catch(e){ btn.disabled=false; btn.textContent='Connect'; ctxErr('repoBody',''+e); return; }
+  if(!r.ok){ btn.disabled=false; btn.textContent='Connect';
+    ctxErr('repoBody', d.detail||'connect failed'); return; }
+  renderRepo(tid,d.repo);
+  const t=TICKETS.find(x=>x.id===tid);
+  if(t){ t.repo_url=d.repo.url; t.repo_task_handle=d.repo.handle; }
+}
+async function disconnectRepoFromTicket(tid){
+  const b=el('repoOff'); b.disabled=true;
+  const r=await fetch(`/api/tickets/${tid}/repo`,{method:'DELETE'});
+  if(!r.ok){ b.disabled=false; ctxErr('repoBody','could not disconnect'); return; }
+  renderRepo(tid,null);
+  const t=TICKETS.find(x=>x.id===tid);
+  if(t){ t.repo_url=null; t.repo_task_handle=null; }
+}
+
+// ---------- ticket context: PDFs (A2) ----------
+// SECURITY: the server extracts and stores this text but nothing reads it into a
+// prompt yet. It is untrusted content (HARDENING P0-5) — see pdf_context.py.
+async function loadPdfs(tid){
+  const r=await fetch(`/api/tickets/${tid}/pdfs`);
+  if(!r.ok) return;
+  if(el('pdfBody')) renderPdfs(tid,(await r.json()).pdfs);
+}
+function renderPdfs(tid,docs){
+  const body=el('pdfBody'); if(!body) return;
+  const rows=(docs||[]).map(p=>`<div class="doc">
+      <span class="dn" title="${esc(p.filename)}">${esc(p.filename)}</span>
+      <span class="dm">${p.pages} page${p.pages===1?'':'s'} · ${p.chars.toLocaleString()} chars</span>
+      <button class="iconbtn" title="Remove" onclick="removePdf('${esc(tid)}','${esc(p.id)}')">✕</button>
+    </div>`).join('');
+  body.innerHTML=`<p class="hint">Specs and design docs the run phase will read as context.
+      Text is extracted on upload; PDFs only.</p>
+    <label class="drop" id="pdfDrop">＋ Choose PDFs or drop them here
+      <input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple></label>
+    ${rows?`<div class="docs">${rows}</div>`:''}`;
+  const drop=el('pdfDrop'), input=el('pdfIn');
+  input.onchange=()=>{ if(input.files.length) sendPdfs(tid,input.files); };
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{
+    e.preventDefault(); drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{
+    e.preventDefault(); drop.classList.remove('over');}));
+  drop.addEventListener('drop',e=>{
+    if(e.dataTransfer.files.length) sendPdfs(tid,e.dataTransfer.files);});
+}
+async function sendPdfs(tid,fileList){
+  const drop=el('pdfDrop'); const was=drop.firstChild.nodeValue;
+  drop.classList.add('busy'); drop.firstChild.nodeValue='Uploading…';
+  el('pdfBody').querySelectorAll('.ctx-err').forEach(x=>x.remove());
+  const fd=new FormData();
+  [...fileList].forEach(f=>fd.append('files',f,f.name));
+  let r,d;
+  try{ r=await fetch(`/api/tickets/${tid}/pdfs`,{method:'POST',body:fd}); d=await r.json(); }
+  catch(e){ drop.classList.remove('busy'); drop.firstChild.nodeValue=was;
+    ctxErr('pdfBody',''+e); return; }
+  if(!r.ok){ drop.classList.remove('busy'); drop.firstChild.nodeValue=was;
+    ctxErr('pdfBody', d.detail||'upload failed'); return; }
+  renderPdfs(tid,d.pdfs);
+  syncPdfIds(tid,d.pdfs);
+}
+async function removePdf(tid,pid){
+  const r=await fetch(`/api/tickets/${tid}/pdfs/${pid}`,{method:'DELETE'});
+  if(!r.ok){ ctxErr('pdfBody','could not remove that document'); return; }
+  const d=await r.json();
+  renderPdfs(tid,d.pdfs);
+  syncPdfIds(tid,d.pdfs);
+}
+function syncPdfIds(tid,docs){
+  const t=TICKETS.find(x=>x.id===tid);
+  if(t) t.pdf_context_ids=(docs||[]).map(p=>p.id);
 }
 function closeDrawer(){ const d=el('drawer'); if(d) d.remove();
   const s=el('dscrim'); if(s) s.remove(); DRAWER_ID=null; }

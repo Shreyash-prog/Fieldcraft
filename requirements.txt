@@ -6,3 +6,8 @@ fastapi>=0.110
 itsdangerous>=2.1          # session cookie signing (fieldcraft_web/auth.py)
 uvicorn[standard]>=0.29
 httpx>=0.27
+# ticket context (A2). python-multipart is not optional: FastAPI raises on any
+# multipart form without it, so the PDF upload route 500s in an image that ships
+# pypdf alone. tests/test_ticket_context.py pins both.
+pypdf>=4.0                 # PDF text extraction (pure python, no system libs)
+python-multipart>=0.0.9    # multipart/form-data parsing for the PDF upload

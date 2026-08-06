@@ -16,11 +16,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import shutil
 import threading
+import time
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +31,7 @@ from pydantic import BaseModel
 
 from fieldcraft_loop import github_source, sandbox
 from fieldcraft_loop.engine import Engine, TERMINAL
+from fieldcraft_loop.pdf_context import PdfContextError, PdfStore
 from fieldcraft_loop.ticket_store import STATUSES, TicketStore
 from . import auth as auth_mod
 from .config import settings
@@ -63,6 +67,12 @@ ledger = Ledger(DATA / "ledger.db", global_cap=settings.daily_cost_cap_usd,
 conc = Concurrency(settings.max_concurrent)
 auth = auth_mod.from_env(DATA)
 tickets = TicketStore(DATA / "tickets.db")
+# Ticket context (A2). Both are namespaced by user_id on disk, so one tenant's
+# clone or PDF is not merely hidden from another — it is in a different tree.
+pdfs = PdfStore(DATA / "ticket_pdfs", max_mb=settings.max_pdf_mb,
+                max_pages=settings.max_pdf_pages,
+                max_per_ticket=settings.max_pdfs_per_ticket)
+TICKET_REPOS = DATA / "ticket_repos"
 
 app = FastAPI(title="Fieldcraft POC")
 app.add_middleware(CORSMiddleware,
@@ -315,7 +325,176 @@ def patch_ticket(tid: str, req: PatchTicket, user: str = Depends(require_session
 @app.delete("/api/tickets/{tid}")
 def delete_ticket(tid: str, user: str = Depends(require_session)):
     _owned_ticket(tid, user)
-    return {"ok": tickets.delete(tid, user)}
+    ok = tickets.delete(tid, user)
+    if ok:                                  # don't leave the context orphaned on disk
+        _drop_ticket_repo(tid, user)
+        try:
+            pdfs.delete_ticket(user, tid)
+        except PdfContextError:
+            pass
+    return {"ok": ok}
+
+
+# --- ticket context: a connected repo (A2) ----------------------------------
+# The same validated, credential-free clone the /api/repos/connect path uses —
+# only the destination and the owning record differ: the clone lands under the
+# tenant's own directory and the ticket keeps the handle. No agent runs here.
+_PART = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+class TicketRepo(BaseModel):
+    url: str
+
+
+def _ticket_repo_dir(tid: str, user: str) -> Path:
+    for part in (user, tid):
+        if not _PART.match(part or ""):
+            raise HTTPException(400, "invalid identifier")
+    return TICKET_REPOS / user / tid
+
+
+def _repo_facts(tid: str, user: str) -> dict | None:
+    p = _ticket_repo_dir(tid, user) / "meta.json"
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _drop_ticket_repo(tid: str, user: str) -> None:
+    """Remove the clone and forget the handle. Safe to call when nothing is set."""
+    facts = _repo_facts(tid, user)
+    if facts:
+        CONNECTED.get(user, {}).pop(facts.get("handle", ""), None)
+    shutil.rmtree(_ticket_repo_dir(tid, user), ignore_errors=True)
+
+
+@app.post("/api/tickets/{tid}/repo")
+def connect_ticket_repo(tid: str, req: TicketRepo, request: Request,
+                        user: str = Depends(require_session)):
+    """Attach a public GitHub repo to this ticket.
+
+    Read-only and offline: credentials are never supplied, nothing is pushed
+    back, and no agent runs (that is A3). Reconnecting replaces the old clone.
+    """
+    _owned_ticket(tid, user)
+    if not ledger.hit("ticketrepo:" + client_ip(request)):
+        raise HTTPException(429, "rate limit: too many requests from your IP, try later")
+    if not conc.acquire():                   # a clone is real work; bound it
+        raise HTTPException(503, "too many concurrent runs; try again shortly")
+
+    # Clone into a staging directory and swap it in only once it is good. A
+    # failed reconnect must leave the repo you already had exactly as it was —
+    # cleaning up `tdir` directly would delete a working clone and leave the
+    # ticket pointing at nothing.
+    tdir = _ticket_repo_dir(tid, user)
+    staging = tdir.parent / f".{tid}.incoming-{uuid.uuid4().hex[:8]}"
+    try:
+        owner, name = github_source.parse_repo_url(req.url)
+        info = github_source.clone_public_repo(req.url, staging / "repo")
+        cmd = github_source.detect_test_command(info.path)
+        handle = f"{owner}/{name} (ticket {tid})"
+        facts = {"handle": handle, "owner": info.owner, "name": info.name,
+                 "url": info.url, "default_branch": info.default_branch,
+                 "file_count": info.file_count, "size_mb": info.size_mb,
+                 "test_command": cmd, "has_tests": github_source.has_tests(info.path),
+                 "connected_at": time.time()}
+        (staging / "task.json").write_text(json.dumps(
+            {"name": handle, "kind": "repo", "repo_dir": "repo", "test_command": cmd,
+             "protected_paths": github_source.DEFAULT_PROTECTED}))
+        (staging / "meta.json").write_text(json.dumps(facts))
+    except github_source.GitHubSourceError as e:
+        shutil.rmtree(staging, ignore_errors=True)   # only ever the new attempt
+        raise HTTPException(400, str(e))
+    finally:
+        conc.release()
+
+    _drop_ticket_repo(tid, user)             # now replace the old one
+    staging.rename(tdir)
+    CONNECTED.setdefault(user, {})[handle] = tdir
+    tickets.update(tid, user, repo_url=info.url, repo_task_handle=handle)
+    return {"repo": facts}
+
+
+@app.get("/api/tickets/{tid}/repo")
+def get_ticket_repo(tid: str, user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    return {"repo": _repo_facts(tid, user)}
+
+
+@app.delete("/api/tickets/{tid}/repo")
+def disconnect_ticket_repo(tid: str, user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    _drop_ticket_repo(tid, user)
+    tickets.update(tid, user, repo_url=None, repo_task_handle=None)
+    return {"ok": True}
+
+
+# --- ticket context: PDF documents (A2) -------------------------------------
+# Uploads are validated by magic bytes and parsed at upload time, so a file that
+# is not a readable PDF is rejected while a human is watching. The extracted text
+# is stored and listed back; NOTHING reads it into a prompt in this phase — see
+# the P0-5 warning in fieldcraft_loop/pdf_context.py before wiring A3.
+
+
+async def _read_capped(f: UploadFile, limit: int) -> bytes:
+    """Read at most limit+1 bytes so an oversize upload is refused without ever
+    being held in memory in full."""
+    buf = bytearray()
+    while True:
+        chunk = await f.read(64 * 1024)
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if len(buf) > limit:
+            raise PdfContextError(
+                f"file is over the {settings.max_pdf_mb} MB limit (FC_MAX_PDF_MB)")
+    return bytes(buf)
+
+
+def _sync_pdf_ids(tid: str, user: str) -> list[dict]:
+    """Keep the ticket's pdf_context_ids in step with what is on disk."""
+    listing = pdfs.list_for(user, tid)
+    tickets.update(tid, user, pdf_context_ids=[m["id"] for m in listing])
+    return listing
+
+
+@app.post("/api/tickets/{tid}/pdfs")
+async def upload_ticket_pdfs(tid: str, files: list[UploadFile] = File(...),
+                             user: str = Depends(require_session)):
+    """Attach one or more PDFs as context. All-or-nothing: if any file in the
+    request is rejected, the ones already stored by *this* request are removed,
+    so a partial batch never lands."""
+    _owned_ticket(tid, user)
+    if len(files) > settings.max_pdfs_per_ticket:
+        raise HTTPException(400, f"at most {settings.max_pdfs_per_ticket} files per upload")
+
+    added: list[dict] = []
+    try:
+        for f in files:
+            data = await _read_capped(f, int(settings.max_pdf_mb * 1024 * 1024))
+            added.append(pdfs.add(user, tid, f.filename, data))
+    except PdfContextError as e:
+        for m in added:                      # roll back this request's writes
+            pdfs.delete(user, tid, m["id"])
+        name = getattr(files[len(added)], "filename", "") if len(added) < len(files) else ""
+        raise HTTPException(400, f"{name}: {e}" if name else str(e))
+
+    return {"pdfs": _sync_pdf_ids(tid, user), "added": [m["id"] for m in added]}
+
+
+@app.get("/api/tickets/{tid}/pdfs")
+def list_ticket_pdfs(tid: str, user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    return {"pdfs": pdfs.list_for(user, tid)}
+
+
+@app.delete("/api/tickets/{tid}/pdfs/{pdf_id}")
+def delete_ticket_pdf(tid: str, pdf_id: str, user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    if not pdfs.delete(user, tid, pdf_id):
+        raise HTTPException(404, "unknown document")
+    return {"ok": True, "pdfs": _sync_pdf_ids(tid, user)}
 
 
 @app.get("/api/tasks")
