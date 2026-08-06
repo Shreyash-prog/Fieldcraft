@@ -1,5 +1,6 @@
 # Fieldcraft POC — container image
 FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
 # non-root user (sandbox hygiene: agent-written code + pytest run as this user)
 RUN useradd -m -u 10001 fieldcraft
