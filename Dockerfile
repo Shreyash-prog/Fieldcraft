@@ -7,7 +7,7 @@ WORKDIR /app
 
 # deps first (layer cache)
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r
+RUN pip install --no-cache-dir -r requirements.txt
 
 # app
 COPY fieldcraft_aar ./fieldcraft_aar
