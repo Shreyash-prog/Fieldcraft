@@ -40,7 +40,10 @@ class RepoTask:
         data["dir"] = str(d)
         return cls(**data)
 
-    def stage_patch(self, i: int) -> Path:
+    def stage_patch(self, i: int) -> Path | None:
+        """None when the task ships no scripted stages (e.g. a connected repo)."""
+        if not self.stages:
+            return None
         return Path(self.dir) / self.stages[min(i, len(self.stages) - 1)]
 
     def solution_patch(self) -> Path:

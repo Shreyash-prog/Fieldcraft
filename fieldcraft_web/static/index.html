@@ -139,6 +139,15 @@ svg .arr{stroke:var(--faint);stroke-width:1.5;fill:none;marker-end:url(#ah)}
           <div><label>Review</label><select id="review"><option value="human">human-in-the-loop</option><option value="auto">auto</option></select></div>
           <div><label>Max iterations</label><input id="maxit" type="number" value="5" min="1" max="10"></div>
         </div>
+        <details class="pol"><summary>⎇ Connect a public GitHub repo</summary>
+          <label>Repository URL (public, https)</label>
+          <div class="chkrow" style="align-items:center;flex-wrap:nowrap">
+            <input id="repoUrl" placeholder="https://github.com/owner/repo">
+            <button class="act ghost" id="connectBtn" style="white-space:nowrap" onclick="connectRepo()">Connect &amp; run</button>
+          </div>
+          <p class="muted" style="font-size:12px;margin:0 0 10px">Shallow-cloned read-only (size-capped, timed out) and run with the offline mock agent: the loop runs the repo’s own test suite and reports its baseline. Nothing is written back to GitHub. Dependencies are not installed, so a repo that needs them will honestly report 0 tests.</p>
+          <p class="muted mono" id="connectMsg" style="font-size:12px;margin:0 0 10px"></p>
+        </details>
         <details class="pol"><summary>⚖︎ Governance policy (optional)</summary>
           <label>Protected paths (comma-separated globs the agent may not edit)</label>
           <input id="polProtected" placeholder="tests/, *.env">
@@ -275,6 +284,26 @@ function buildPolicy(){
   if(el('fbNet').checked) forbid.network_call="\\b(requests\\.(get|post)|urllib\\.request\\.urlopen|socket\\.socket)\\b";
   if(!prot.length && !Object.keys(forbid).length) return null;
   return {protected_paths:prot, editable_paths:["**"], forbidden_patterns:forbid};
+}
+async function connectRepo(){
+  const url=el('repoUrl').value.trim();
+  const msg=el('connectMsg'), btn=el('connectBtn');
+  if(!url){ msg.textContent='enter a public https://github.com/<owner>/<repo> URL'; return; }
+  btn.disabled=true; msg.textContent='cloning…';
+  let d;
+  try{
+    const r=await fetch('/api/repos/connect',{method:'POST',headers:{'content-type':'application/json'},
+                                              body:JSON.stringify({url})});
+    d=await r.json();
+    if(!r.ok){ msg.textContent='✗ '+(d.detail||'connect failed'); btn.disabled=false; return; }
+  }catch(e){ msg.textContent='✗ '+e; btn.disabled=false; return; }
+  await loadTasks();
+  el('task').value=d.task; el('adapter').value='mock'; el('grader').value='behavioral';
+  msg.textContent=`✓ ${d.repo.name} @ ${d.repo.default_branch} · ${d.repo.file_count} files · `+
+                  `${d.repo.size_mb} MB · tests: ${d.test_command.join(' ')}`+
+                  (d.tests_detected?'':' · ⚠ no test suite found — the verdict will report 0 tests');
+  btn.disabled=false;
+  start();                                  // same brief + SSE timeline as bundled tasks
 }
 let EVENTS=[];
 async function start(){

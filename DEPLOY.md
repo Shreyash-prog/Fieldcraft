@@ -16,6 +16,15 @@ can expose it with zero API spend; flip live mode on when you want the real agen
 - **Durable history** — completed runs + AARs persist in SQLite and survive restart;
   runs interrupted by a restart are reconciled to `interrupted`.
 - **Health check** — `GET /healthz` (used by the container + Fly checks).
+- **Connected repos are read-only and bounded** — `POST /api/repos/connect` shallow-clones
+  a **public** `https://github.com/<owner>/<repo>` URL (no credentials, nothing pushed back),
+  rebuilds the clone URL from the validated owner/repo (so nothing user-typed reaches git),
+  times out at `FC_CLONE_TIMEOUT_S`, and deletes any clone over `FC_MAX_REPO_MB`. Connected
+  repos run with the **mock agent only**, so this path never spends. Caveat: the size cap is
+  measured *after* the clone (git has no size limit flag) — the timeout is what bounds the
+  download itself. Dependencies are not installed, so a repo needing them reports `0/0`
+  tests rather than a score. Running a connected repo's tests is still unsandboxed
+  execution (HARDENING P0-1).
 
 ## Deploy to Fly.io
 
@@ -65,5 +74,7 @@ set the `FC_*` env vars.
 | `FC_MAX_BUDGET_PER_RUN_USD` | `1` | per-run budget clamp |
 | `FC_MAX_ITERATIONS` | `6` | per-run iteration clamp |
 | `FC_PYTEST_TIMEOUT_S` | `30` | test subprocess timeout |
+| `FC_MAX_REPO_MB` | `50` | size cap on a connected GitHub repo |
+| `FC_CLONE_TIMEOUT_S` | `60` | `git clone` timeout for a connected repo |
 | `FC_DATA_DIR` | `out/web` (`/data` in container) | SQLite location |
 | `FC_CORS_ORIGINS` | `*` | allowed origins |

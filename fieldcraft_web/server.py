@@ -8,6 +8,7 @@ concurrency guard, request clamps, health check, CORS.
 """
 from __future__ import annotations
 
+import json
 import os
 import threading
 import uuid
@@ -18,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from fieldcraft_loop import github_source
 from fieldcraft_loop.engine import Engine, TERMINAL
 from .config import settings
 from .limits import RateLimiter, CostTracker, Concurrency
@@ -34,6 +36,9 @@ TASKS = {
     "chunk": (ROOT / "tasks" / "chunk", "single"),
     "textkit (multi-file repo)": (ROOT / "repo_tasks" / "textkit", "repo"),
 }
+
+# repo tasks built at runtime from a connected public GitHub repo: handle -> task dir
+CONNECTED: dict[str, Path] = {}
 
 engine = Engine(DATA)
 rate = RateLimiter(settings.briefs_per_hour)
@@ -98,6 +103,10 @@ def healthz():
 def create_brief(req: CreateBrief, request: Request):
     if not rate.allow(client_ip(request)):
         raise HTTPException(429, "rate limit: too many briefs from your IP, try later")
+    connected = req.task in CONNECTED
+    if connected and (req.adapter != "mock" or req.grader == "tooluse"):
+        raise HTTPException(403, "connected repos run with the offline mock agent only "
+                                 "(adapter='mock', grader='behavioral')")
     live = req.adapter == "claude" or req.grader == "tooluse"
     if live and not settings.allow_live:
         raise HTTPException(403, "live mode is disabled on this deployment")
@@ -108,9 +117,11 @@ def create_brief(req: CreateBrief, request: Request):
 
     req.max_iterations = max(1, min(req.max_iterations, settings.max_iterations_cap))
     req.budget = max(0.1, min(req.budget, settings.max_budget_per_run_usd))
-    cfg = {**req.model_dump(),
-           "goal": "Implement redact_pii so all tests and acceptance criteria pass"}
-    task_dir = str(TASKS.get(req.task, (Path(TASK_DIR), "single"))[0])
+    goal = ("Make the connected repository's test suite pass" if connected else
+            "Implement redact_pii so all tests and acceptance criteria pass")
+    cfg = {**req.model_dump(), "goal": goal}
+    task_dir = str(CONNECTED[req.task] if connected
+                   else TASKS.get(req.task, (Path(TASK_DIR), "single"))[0])
     bid = engine.create(cfg, task_dir)
     _drive(bid, gated=True)
     return {"brief_id": bid, "config": req.model_dump()}
@@ -153,7 +164,48 @@ def submit_review(brief_id: str, req: ReviewReq):
 
 @app.get("/api/tasks")
 def list_tasks():
-    return {"tasks": [{"name": n, "kind": k} for n, (_, k) in TASKS.items()]}
+    out = [{"name": n, "kind": k} for n, (_, k) in TASKS.items()]
+    out += [{"name": n, "kind": "repo"} for n in CONNECTED]
+    return {"tasks": out}
+
+
+class ConnectRepo(BaseModel):
+    url: str
+
+
+@app.post("/api/repos/connect")
+def connect_repo(req: ConnectRepo, request: Request):
+    """Shallow-clone a public GitHub repo and turn it into a runnable repo task.
+
+    Read-only and offline: nothing is pushed back, and no agent runs here — the
+    caller starts a normal brief against the returned handle (mock adapter only,
+    so FC_ALLOW_LIVE is untouched by this path).
+    """
+    if not rate.allow(client_ip(request)):
+        raise HTTPException(429, "rate limit: too many requests from your IP, try later")
+    if not conc.acquire():                       # a clone is real work; bound it
+        raise HTTPException(503, "too many concurrent runs; try again shortly")
+    try:
+        owner, name = github_source.parse_repo_url(req.url)
+        handle = f"{owner}/{name} (connected)"
+        tdir = DATA / "connected" / f"{owner}-{name}-{uuid.uuid4().hex[:6]}"
+        info = github_source.clone_public_repo(req.url, tdir / "repo")
+        cmd = github_source.detect_test_command(info.path)
+        (tdir / "task.json").write_text(json.dumps(
+            {"name": handle, "kind": "repo", "repo_dir": "repo", "test_command": cmd,
+             "protected_paths": github_source.DEFAULT_PROTECTED}))
+    except github_source.GitHubSourceError as e:
+        raise HTTPException(400, str(e))
+    finally:
+        conc.release()
+
+    CONNECTED[handle] = tdir
+    return {"task": handle, "adapter": "mock", "kind": "repo", "test_command": cmd,
+            "protected_paths": github_source.DEFAULT_PROTECTED,
+            "tests_detected": github_source.has_tests(info.path),
+            "repo": {"owner": info.owner, "name": info.name, "url": info.url,
+                     "default_branch": info.default_branch,
+                     "file_count": info.file_count, "size_mb": info.size_mb}}
 
 
 # --- differentiator reports (computed lazily on first request, then cached) ---

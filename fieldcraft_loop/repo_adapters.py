@@ -22,6 +22,12 @@ class RepoMockAdapter:
         task = RepoTask.load(task_dir)
         before = snapshot(workdir)
         patch = task.solution_patch() if feedback.strip() else task.stage_patch(0)
+        if patch is None or not patch.exists():
+            # a connected repo has no scripted patches: make no edits, so the
+            # verdict reports the repo's own test baseline honestly
+            return _trace("repo-mock", turn_index, before, workdir,
+                          "no scripted patch for this repo — reporting its test baseline",
+                          0, 0.0)
         apply_patch(patch, workdir)
         note = "applied full solution per feedback" if feedback.strip() else "first pass (one module)"
         return _trace("repo-mock", turn_index, before, workdir, note, 3, self.COST)
@@ -38,6 +44,10 @@ class RepoGuidedAdapter:
         knows = any(kw.lower() in self.guide for kw in task.trap_keywords)
         before = snapshot(workdir)
         patch = task.solution_patch() if (knows or feedback.strip()) else task.stage_patch(0)
+        if patch is None or not patch.exists():
+            return _trace("repo-guided", turn_index, before, workdir,
+                          "no scripted patch for this repo — reporting its test baseline",
+                          0, 0.0)
         note = ("full solution — Field Guide flagged the trap up front"
                 if knows and turn_index == 1 else
                 ("applied full solution per feedback" if feedback.strip() else "first pass (one module)"))
