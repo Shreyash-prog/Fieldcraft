@@ -60,3 +60,17 @@ class RunStore:
         with self._lock:
             cur = self.db.execute("SELECT brief_id FROM runs WHERE status=?", (status,))
             return [r[0] for r in cur.fetchall()]
+
+    def list_all(self, limit: int = 50) -> list[dict]:
+        with self._lock:
+            cur = self.db.execute(
+                "SELECT brief_id,status,iteration,total_cost,config,created,updated "
+                "FROM runs ORDER BY created DESC LIMIT ?", (limit,))
+            rows = cur.fetchall()
+        out = []
+        for r in rows:
+            cfg = json.loads(r[4])
+            out.append({"brief_id": r[0], "status": r[1], "iteration": r[2],
+                        "total_cost": r[3], "config": cfg,
+                        "created": r[5], "updated": r[6]})
+        return out

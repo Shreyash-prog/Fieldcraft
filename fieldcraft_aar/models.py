@@ -46,6 +46,7 @@ class Effectiveness:
     all_tests_pass: bool
     criteria: list[CriterionVerdict] = field(default_factory=list)
     score: float = 0.0    # 0..1 composite
+    failing_tests: list[str] = field(default_factory=list)
 
     @property
     def criteria_met(self) -> int:

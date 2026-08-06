@@ -15,7 +15,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from fieldcraft_loop.engine import Engine, TERMINAL
@@ -26,6 +26,14 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("FC_DATA_DIR", ROOT / "out" / "web"))
 STATIC = Path(__file__).resolve().parent / "static"
 TASK_DIR = str(ROOT / "sample_task")
+
+TASKS = {
+    "redact_pii": (ROOT / "sample_task", "single"),
+    "slugify": (ROOT / "tasks" / "slugify", "single"),
+    "parse_bool": (ROOT / "tasks" / "parse_bool", "single"),
+    "chunk": (ROOT / "tasks" / "chunk", "single"),
+    "textkit (multi-file repo)": (ROOT / "repo_tasks" / "textkit", "repo"),
+}
 
 engine = Engine(DATA)
 rate = RateLimiter(settings.briefs_per_hour)
@@ -61,11 +69,13 @@ def _resume():
 
 
 class CreateBrief(BaseModel):
+    task: str = "redact_pii"
     adapter: str = "mock"
     grader: str = "behavioral"
     review: str = "human"
     max_iterations: int = 5
     budget: float = 2.0
+    policy: dict | None = None
 
 
 class ReviewReq(BaseModel):
@@ -100,7 +110,8 @@ def create_brief(req: CreateBrief, request: Request):
     req.budget = max(0.1, min(req.budget, settings.max_budget_per_run_usd))
     cfg = {**req.model_dump(),
            "goal": "Implement redact_pii so all tests and acceptance criteria pass"}
-    bid = engine.create(cfg, TASK_DIR)
+    task_dir = str(TASKS.get(req.task, (Path(TASK_DIR), "single"))[0])
+    bid = engine.create(cfg, task_dir)
     _drive(bid, gated=True)
     return {"brief_id": bid, "config": req.model_dump()}
 
@@ -138,6 +149,133 @@ def submit_review(brief_id: str, req: ReviewReq):
     if after and after["status"] == "running":
         _drive(brief_id, gated=False)     # resume without gating (bounded by max_iterations)
     return {"ok": True}
+
+
+@app.get("/api/tasks")
+def list_tasks():
+    return {"tasks": [{"name": n, "kind": k} for n, (_, k) in TASKS.items()]}
+
+
+# --- differentiator reports (computed lazily on first request, then cached) ---
+import dataclasses  # noqa: E402
+
+_REPORTS: dict = {}
+
+
+def _rep_benchmark():
+    from fieldcraft_bench.run import benchmark
+    return benchmark()
+
+
+def _rep_measurement():
+    from fieldcraft_measure.run import measure
+    r = measure()
+    return {"scorecards": [dataclasses.asdict(c) for c in r["cards"]],
+            "diffs": r["diffs"], "effect": r["effect"]}
+
+
+def _rep_flywheel():
+    from fieldcraft_guide.flywheel import demo
+    return demo(str(ROOT / "sample_task"))
+
+
+def _rep_governance():
+    from fieldcraft_loop.repo_task import apply_patch, snapshot, multi_file_diff
+    from fieldcraft_aar.models import RunTrace, Turn
+    from fieldcraft_gov.report import governance_summary
+    from fieldcraft_gov.credentials import CredentialBroker
+
+    class _V:
+        def turn(self, task_dir, workdir, feedback, turn_index):
+            before = snapshot(workdir)
+            apply_patch(Path(task_dir) / ".solution", workdir)
+            (workdir / "config.py").write_text('API_KEY = "AKIA1234567890ABCDEF"\n')
+            return RunTrace(condition="t1", adapter="violator", spec_completeness=0.9,
+                            turns=[Turn(cost_usd=0.09, tool_calls=3, event="progress", note="")],
+                            wall_clock_s=1.0, diff=multi_file_diff(before, snapshot(workdir)))
+    import tempfile
+    e = Engine(tempfile.mkdtemp())
+    e._adapter = lambda cfg: _V()
+    b = e.create({"adapter": "mock", "review": "auto",
+                  "policy": {"editable_paths": ["textkit/**", "config.py"], "protected_paths": ["tests/"]}},
+                 str(ROOT / "repo_tasks" / "textkit"))
+    e.advance(b)
+    gov = governance_summary(e.get_events(b))
+    br = CredentialBroker()
+    g = br.issue("BRIEF-demo", ["repo:read", "tests:run"], ttl_s=300)
+    creds = [{"cap": "tests:run", "allowed": br.check(g.grant_id, "tests:run")},
+             {"cap": "repo:write", "allowed": br.check(g.grant_id, "repo:write")}]
+    br.revoke(g.grant_id)
+    creds.append({"cap": "tests:run (after revoke)", "allowed": br.check(g.grant_id, "tests:run")})
+    return {"final_state": e.aar(e.get(b))["final_state"], "governance": gov,
+            "grant_scope": sorted(g.capabilities), "credential_checks": creds,
+            "audit_entries": len(br.audit)}
+
+
+_REPORT_FNS = {"benchmark": _rep_benchmark, "measurement": _rep_measurement,
+               "flywheel": _rep_flywheel, "governance": _rep_governance}
+
+
+def _compute_report(kind: str):
+    try:
+        _REPORTS[kind] = {"status": "ready", "data": _REPORT_FNS[kind]()}
+    except Exception as e:  # surface, don't hang
+        _REPORTS[kind] = {"status": "error", "error": repr(e)}
+
+
+@app.get("/api/reports/{kind}")
+def get_report(kind: str):
+    if kind not in _REPORT_FNS:
+        raise HTTPException(404, "unknown report")
+    r = _REPORTS.get(kind)
+    if r is None:
+        _REPORTS[kind] = {"status": "computing"}
+        threading.Thread(target=_compute_report, args=(kind,), daemon=True).start()
+        return {"status": "computing"}
+    return r
+
+
+@app.get("/api/briefs")
+def list_briefs():
+    out = []
+    for r in engine.runs.list_all():
+        cfg = r["config"]; td = cfg.get("task_dir", "")
+        out.append({"brief_id": r["brief_id"], "status": r["status"],
+                    "iteration": r["iteration"], "cost": round(r["total_cost"], 4),
+                    "adapter": cfg.get("adapter", ""), "policy": bool(cfg.get("policy")),
+                    "task": Path(td).name if td else "", "created": r["created"]})
+    return {"briefs": out}
+
+
+def _sse(event: str, data) -> str:
+    import json as _j
+    return f"event: {event}\ndata: {_j.dumps(data)}\n\n"
+
+
+@app.get("/api/briefs/{bid}/stream")
+async def stream(bid: str):
+    import asyncio
+
+    async def gen():
+        seen = 0
+        for _ in range(2400):                       # ~12 min ceiling
+            r = engine.get(bid)
+            if not r:
+                yield _sse("state", {"status": "error"}); return
+            ev = engine.get_events(bid)
+            for e in ev[seen:]:
+                yield _sse("event", e)
+            seen = len(ev)
+            st = r["status"]
+            if st in ("done", "needs_human", "error"):
+                yield _sse("state", {"status": st, "aar": engine.aar(r)}); return
+            if st == "awaiting_review":
+                yield _sse("state", {"status": "awaiting_review", "pending": engine.pending(bid)}); return
+            await asyncio.sleep(0.3)
+        yield _sse("state", {"status": "timeout"})
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/")

@@ -98,7 +98,7 @@ def _glossary(names: Counter) -> dict[str, str]:
 def _traps(root: Path) -> list[str]:
     traps: list[str] = []
     # curated notes
-    for cand in ("NOTES.md", "FIELD_GUIDE_SEED.md", ".fieldguide/notes.md"):
+    for cand in ("NOTES.md", "FIELD_GUIDE_SEED.md", ".fieldguide/notes.md", ".fieldguide/learned.md"):
         f = root / cand
         if f.exists():
             grab = False

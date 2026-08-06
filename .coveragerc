@@ -1,0 +1,6 @@
+# Omit only: trivial `sys.exit(main())` shims, and the grader that requires a
+# live API key (can't run offline). Everything else is measured honestly.
+[run]
+omit =
+    */__main__.py
+    fieldcraft_aar/grader_tooluse.py

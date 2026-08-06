@@ -36,16 +36,28 @@ class Engine:
     # -- lifecycle ---------------------------------------------------------
     def create(self, config: dict, task_dir: str) -> str:
         from .task import Task
-        task = Task.load(task_dir)
         bid = "BRIEF-" + uuid.uuid4().hex[:6]
         wd = self.dir / "work" / bid
-        if wd.exists():
-            shutil.rmtree(wd)
-        wd.mkdir(parents=True)
-        for f in (task.target_file, task.test_file):
-            shutil.copy2(Path(task_dir) / f, wd / f)
-        config = {**config, "task_dir": str(task_dir), "module": task.module,
-                  "criteria_file": task.criteria_file}
+        kind = "single"
+        try:
+            kind = json.loads((Path(task_dir) / "task.json").read_text()).get("kind", "single")
+        except Exception:
+            pass
+        if kind == "repo":
+            from .repo_task import RepoTask, copy_repo
+            rt = RepoTask.load(task_dir)
+            copy_repo(rt, wd)
+            config = {**config, "task_dir": str(task_dir), "kind": "repo",
+                      "test_command": rt.test_command}
+        else:
+            task = Task.load(task_dir)
+            if wd.exists():
+                shutil.rmtree(wd)
+            wd.mkdir(parents=True)
+            for f in (task.target_file, task.test_file):
+                shutil.copy2(Path(task_dir) / f, wd / f)
+            config = {**config, "task_dir": str(task_dir), "kind": "single",
+                      "module": task.module, "criteria_file": task.criteria_file}
         self.runs.create(bid, config, str(wd))
         self.events.append(bid, 0, State.DRAFT, "created", {"goal": config.get("goal", "")})
         self.events.append(bid, 0, State.READY, "ready", {})
@@ -60,8 +72,10 @@ class Engine:
         cfg = r["config"]
         task_dir = Path(cfg["task_dir"])
         wd = Path(r["workdir"])
+        is_repo = cfg.get("kind") == "repo"
         module = cfg.get("module", "redact")
-        criteria = json.loads((task_dir / cfg.get("criteria_file", "criteria.json")).read_text())
+        criteria = ([] if is_repo else
+                    json.loads((task_dir / cfg.get("criteria_file", "criteria.json")).read_text()))
         adapter, grader = self._adapter(cfg), self._grader(cfg)
         it, total, traj = r["iteration"], r["total_cost"], list(r["trajectory"])
         last_fb = r["last_feedback"]
@@ -71,7 +85,29 @@ class Engine:
         while True:
             it += 1
             self.events.append(bid, it, State.WORKING, "turn_start", {"feedback": last_fb})
+            pre = None
+            if cfg.get("policy"):
+                from .repo_task import snapshot as _snap
+                pre = _snap(wd)
             trace = adapter.turn(task_dir, wd, last_fb, it)
+
+            if cfg.get("policy"):
+                from fieldcraft_gov.policy import Policy
+                from fieldcraft_gov.enforce import enforce as _enforce
+                from .repo_task import snapshot as _snap, multi_file_diff as _mfd
+                pol = Policy.from_dict(cfg["policy"])
+                decision, reverted = _enforce(pol, trace.diff, pre or {}, wd,
+                                              command=cfg.get("test_command"))
+                if reverted:
+                    trace.diff = _mfd(pre or {}, _snap(wd))
+                self.events.append(bid, it, State.VERIFYING, "policy", {
+                    "decision": decision.summary(), "reverted": reverted,
+                    "violations": [{"kind": v.kind, "ref": v.ref, "action": v.action,
+                                    "reason": v.reason} for v in decision.violations]})
+                if decision.blocked or (decision.requires_approval and cfg.get("review") == "auto"):
+                    self.events.append(bid, it, State.NEEDS_HUMAN, "policy_stop",
+                                       {"reason": decision.summary()})
+                    return self._terminal(bid, "needs_human", it, total, traj, None)
             tc = round(sum(t.cost_usd for t in trace.turns), 4)
             total = round(total + tc, 4)
             self.events.append(bid, it, State.WORKING, "turn_done",
@@ -82,10 +118,15 @@ class Engine:
                 self.events.append(bid, it, State.NEEDS_HUMAN, "budget_exceeded", {"total_cost_usd": total})
                 return self._terminal(bid, "needs_human", it, total, traj, None)
 
-            eff = compute_effectiveness(wd, criteria, trace.diff, grader, module)
+            if is_repo:
+                from .repo_task import compute_repo_effectiveness
+                eff = compute_repo_effectiveness(wd, cfg["test_command"])
+            else:
+                eff = compute_effectiveness(wd, criteria, trace.diff, grader, module)
             traj = traj + [eff.score]
             verdict = {"score": eff.score, "tests": f"{eff.tests_passed}/{eff.tests_total}",
                        "criteria_met": eff.criteria_met, "criteria_total": len(eff.criteria),
+                       "failing_tests": list(getattr(eff, "failing_tests", [])),
                        "criteria": [{"id": c.id, "verdict": c.verdict, "evidence": c.rationale}
                                     for c in eff.criteria]}
             self.events.append(bid, it, State.VERIFYING, "verdict", verdict)
@@ -128,10 +169,13 @@ class Engine:
             return self._terminal(bid, "needs_human", it, r["total_cost"], r["trajectory"], "human")
 
         # changes: classify the comment into next-turn directives
-        crit_texts = {c["id"]: c["text"] for c in json.loads(
-            (Path(cfg["task_dir"]) / cfg.get("criteria_file", "criteria.json")).read_text())}
-        crits = [types.SimpleNamespace(id=c["id"], text=crit_texts.get(c["id"], c["id"]),
-                                       verdict=c["verdict"]) for c in r["last_verdict"]["criteria"]]
+        if cfg.get("kind") == "repo":
+            crits = []          # repo tasks have no per-criterion probes
+        else:
+            crit_texts = {c["id"]: c["text"] for c in json.loads(
+                (Path(cfg["task_dir"]) / cfg.get("criteria_file", "criteria.json")).read_text())}
+            crits = [types.SimpleNamespace(id=c["id"], text=crit_texts.get(c["id"], c["id"]),
+                                           verdict=c["verdict"]) for c in r["last_verdict"]["criteria"]]
         directives = fb.classify_comment(comment, crits) if comment else []
         last_fb = fb.render(directives) if directives else r["last_feedback"]
         self.events.append(bid, it, State.CHANGES_REQUESTED, "changes_requested",
@@ -182,6 +226,13 @@ class Engine:
 
     def _adapter(self, cfg):
         name = cfg.get("adapter", "mock")
+        if cfg.get("kind") == "repo":
+            from .repo_adapters import RepoMockAdapter, RepoGuidedAdapter, RepoLiveAdapter
+            if name == "claude":
+                return RepoLiveAdapter(guide_context=self._guide(cfg))
+            if name == "guided":
+                return RepoGuidedAdapter(self._guide(cfg))
+            return RepoMockAdapter()
         if name == "claude":
             from .live_adapter import ClaudeCodeLoopAdapter
             return ClaudeCodeLoopAdapter(guide_context=self._guide(cfg))

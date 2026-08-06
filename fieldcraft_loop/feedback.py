@@ -16,11 +16,19 @@ def assemble_feedback(effectiveness) -> list[Directive]:
                 instruction=f"{c.text}: currently '{c.verdict}'. Make it pass. ({c.rationale})",
             ))
     if not effectiveness.all_tests_pass:
-        directives.append(Directive(
-            type="global_constraint", ref="tests",
-            instruction=(f"{effectiveness.tests_passed}/{effectiveness.tests_total} "
-                         f"tests pass; all must pass."),
-        ))
+        failing = getattr(effectiveness, "failing_tests", None)
+        if failing:
+            directives.append(Directive(
+                type="global_constraint", ref="tests",
+                instruction=("These tests still fail: " + ", ".join(failing[:6])
+                             + ". Fix the implementation (do not edit the tests)."),
+            ))
+        else:
+            directives.append(Directive(
+                type="global_constraint", ref="tests",
+                instruction=(f"{effectiveness.tests_passed}/{effectiveness.tests_total} "
+                             f"tests pass; all must pass."),
+            ))
     return directives
 
 

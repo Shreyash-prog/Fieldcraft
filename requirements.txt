@@ -1,5 +1,6 @@
 # core (offline: harness, loop, guide, benchmark, measurement)
 pytest>=7.4
+pytest-cov>=4.1
 # web POC + deploy
 fastapi>=0.110
 uvicorn[standard]>=0.29

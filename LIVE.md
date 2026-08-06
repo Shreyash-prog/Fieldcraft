@@ -66,3 +66,33 @@ full loop plus every failure branch.
   actual codebase (the next depth increment).
 - Real-LLM convergence is variable — the `2 iterations` seen with mocks won't be
   exact live; read the real number from the loop AAR.
+
+## Running on a real multi-file repository
+
+The loop operates on multi-file repos, not just single files. A repo task
+(`task.json` with `"kind": "repo"`) declares:
+
+- `repo_dir` — the repository to copy into each run's workdir,
+- `test_command` — how to verify (e.g. `["python","-m","pytest","-q"]`),
+- `protected_paths` — paths the agent must not edit (e.g. `["tests/"]`).
+
+The workdir is a full copy of the repo; verification runs the test command; the
+diff spans every changed file; and if the agent edits a protected path, the edit
+is **reverted** (an agent can't pass tests by rewriting them). See
+`repo_tasks/textkit/` for a worked example, and run the offline robustness suite:
+
+```bash
+python tools/repo_robustness_check.py          # loop + integrity guard, no key
+```
+
+To run it live on your own repo, add a `task.json` (`kind: repo`, your
+`test_command`, your `protected_paths`) and:
+
+```bash
+python -c "from fieldcraft_loop.engine import Engine; e=Engine('.fc'); \
+b=e.create({'adapter':'claude','review':'human'}, 'path/to/your/repo_task'); e.advance(b)"
+```
+
+Honest scope: the multi-file machinery (copy, verify, diff, integrity, feedback,
+resumable review) is tested via mock and a contract-conformant fake CLI. The
+live-LLM run on a real repo is yours to validate with the `claude` CLI + key.

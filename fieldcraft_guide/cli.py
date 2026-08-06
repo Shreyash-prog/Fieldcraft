@@ -14,7 +14,13 @@ def main(argv=None) -> int:
     ctx.add_argument("repo")
     q = sub.add_parser("search", help="query the Field Guide")
     q.add_argument("repo"); q.add_argument("query")
+    fw = sub.add_parser("flywheel", help="learn a trap from a run, show the speedup")
+    fw.add_argument("repo")
     a = ap.parse_args(argv)
+
+    if a.cmd == "flywheel":
+        from .flywheel import main as fw_main
+        return fw_main([a.repo])
 
     g = bootstrap(a.repo)
     if a.cmd == "bootstrap":

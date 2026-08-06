@@ -1,0 +1,5 @@
+{"name":"textkit","kind":"repo","repo_dir":"repo",
+ "test_command":["python","-m","pytest","-q"],
+ "protected_paths":["tests/"],
+ "stages":[".stages/stage1"],"solution":".solution",
+ "trap_keywords":["casing","snake","camel","separator"]}
