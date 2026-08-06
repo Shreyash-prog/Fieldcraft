@@ -39,6 +39,32 @@ Efficiency is compared **only at constant effectiveness** — "used less" counts
 
 ---
 
+## Is the judge trustworthy? — measured
+
+Open-ended acceptance criteria are graded by a Claude **forced tool-use** judge, so
+the obvious question is whether that judge agrees with a human. Calibrated against
+38 hand-labeled fixtures:
+
+> **Mean Cohen's kappa 0.886 across 5 live runs** (range 0.856–0.916, SD 0.022),
+> **94.5% agreement over 152 forced-tool-use judgments** per run. Perfect agreement
+> on 3 of 4 criteria, with a **characterized conservative bias on AC4**
+> (idempotence edge cases).
+
+Every one of the 42 disagreements across 760 judgments was the same direction — the
+judge saying `unmet` where the label said `met`. There were no false `met` verdicts,
+so the judge under-reports effectiveness rather than inflating it.
+
+Scope, stated plainly: **5 runs on one fixture set for one task — not a large
+study**, and the fixtures are committed rather than held out, so they can be tuned
+against. Raw per-run numbers, method, and limits: [`docs/CALIBRATION.md`](docs/CALIBRATION.md).
+
+```bash
+python -m fieldcraft_aar.calibration --grader tooluse   # reproduce (needs ANTHROPIC_API_KEY)
+python -m fieldcraft_aar.calibration                    # offline, deterministic grader
+```
+
+---
+
 ## Live mode
 
 ```bash
@@ -54,8 +80,10 @@ Runs a real Claude Code session (`claude -p --output-format json`) in a fresh wo
 ```
 fieldcraft_aar/      the harness: adapters · effectiveness · telemetry · aar · report
 sample_task/         a small PII-redaction task (stub, tests, criteria, reference solution)
+sample_task/fixtures 38 hand-labeled candidates the judge is calibrated against
 scenarios/           recorded run traces for offline mock mode
 docs/architecture.md the broader design this slice belongs to
+docs/CALIBRATION.md  measured judge calibration — raw five-run results and method
 ```
 
 ---
@@ -73,6 +101,7 @@ To be clear about status: **the measurement slice in this repo runs; the full ar
 - **v0.** The mock scenarios are illustrative traces; live mode produces real numbers.
 - **Fair cross-operator comparison needs N.** Difficulty-adjusting real, different tasks to isolate operator skill improves with data — it is a direction, not a solved ranking engine. Standardized benchmark tasks (like the sample) give clean apples-to-apples soonest.
 - Effectiveness rests on test quality — passing tests narrow the correctness gap, they don't close it.
+- **The judge is calibrated, not solved.** kappa 0.886 ± 0.022 is five runs over one committed fixture set; a held-out set, an ensemble, and cross-task calibration are outstanding ([HARDENING P1-3](HARDENING.md)). Re-run calibration after any model, prompt, or criteria change — the number does not transfer.
 
 ## License
 

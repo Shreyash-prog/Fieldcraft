@@ -96,9 +96,14 @@ Legend: **P0** = must exist before any real/untrusted connection is wired. **P1*
 - **Problem:** anyone with DB/disk access (incl. a sandbox-escaped agent) can rewrite history; a customer security team won't accept a mutable audit.
 - **Remediation:** enforce append-only + hash-chain or sign events so tampering is detectable.
 
-### P1-3 · Judge trust: variance + held-out calibration
-- **Where:** `fieldcraft_aar/` calibration — single run, 0.83 kappa, unmeasured variance; behavioral probes are fixed/known (gameable, Goodhart).
-- **Remediation:** measure kappa variance across runs; maintain a refreshed held-out calibration set; consider an ensemble / disagreement-flagging so one judge miss doesn't silently corrupt a score.
+### P1-3 · Judge trust: variance + held-out calibration — **PARTIALLY ADDRESSED**
+*Variance is now measured across 5 live runs; a held-out set and an ensemble are still future work.*
+
+- **Where:** `fieldcraft_aar/calibration.py`; results recorded in [`docs/CALIBRATION.md`](docs/CALIBRATION.md).
+- **Measured (5 live runs against the Anthropic API, forced tool-use judge, 38 labeled fixtures = 152 judgments per run):** mean Cohen's kappa **0.886**, range 0.856–0.916, **SD 0.022**; mean agreement 94.5%. Per-criterion agreement is 1.000 on AC1/AC2/AC3 and 0.779 on AC4.
+- **Failure mode is characterized, not just quantified:** all 42 disagreements across 760 judgments were the judge predicting `unmet` where the label was `met`, on AC4 (idempotence), concentrated on edge-case fixtures (`empty_out.py` and part of the `gen_0NN` set). There were **no false `met` verdicts** — the bias is conservative, so a score from this judge is a floor, not an inflated ceiling. Because the same fixture family fails each run, most of the kappa spread is a handful of borderline cases flipping rather than broad instability.
+- **Still open:** the fixture set is **fixed and committed, so it can be tuned against** (Goodhart) — a refreshed held-out set is outstanding; there is no ensemble or disagreement-flagging, so one judge miss still passes through silently; and this is one task, one fixture set, one model, five runs — not a broad study, and it does not transfer to other criteria or a changed prompt/model.
+- **Remediation (remaining):** maintain a refreshed held-out calibration set; add an ensemble / disagreement-flagging path; re-run calibration on any model, prompt, or criteria change and commit the result alongside the existing table.
 
 ### P1-4 · Reproducible live runs
 - **Problem:** no run manifest (model version, prompt hash, temperature, seeds) — a live score can't be reproduced.
