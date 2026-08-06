@@ -6,8 +6,8 @@ RUN useradd -m -u 10001 fieldcraft
 WORKDIR /app
 
 # deps first (layer cache)
-COPY requirements.txt requirements-web.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-web.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r
 
 # app
 COPY fieldcraft_aar ./fieldcraft_aar
