@@ -365,17 +365,13 @@ function openTicket(id){
       <div class="ctx-block"><div class="h">▤ PDF context</div>
         <div id="pdfBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
 
+      <p class="fam" style="margin-top:24px">Delivery comparison</p>
+      <div class="ctx-block"><div class="h">▶ Three-mode comparison</div>
+        <div id="cmpBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
+
       <p class="fam" style="margin-top:24px">Coming in the run phase</p>
       <div class="soon-block"><div class="h">✦ Obsidian brain<span class="tagx">not wired</span></div>
         <p>A linked knowledge base the loop reads from and writes learnings back into.</p></div>
-      <div class="soon-block"><div class="h">▶ Three-mode comparison<span class="tagx">not wired</span></div>
-        <p>Run this ticket three ways and compare cost, iterations and effectiveness.
-           Each run lands in <span class="mono">runs[]</span> tagged with its mode.</p>
-        <div class="modes">
-          <div class="mode"><span class="mi">1</span>Human in the loop · reviews only</div>
-          <div class="mode"><span class="mi">2</span>Human in the loop · reviews + comments</div>
-          <div class="mode"><span class="mi">3</span>Autonomous · no human turn</div>
-        </div></div>
 
       <div class="danger" id="dz">
         <p>Deleting a ticket is permanent — there is no undo.</p>
@@ -388,7 +384,136 @@ function openTicket(id){
   el('dwSeg').addEventListener('click',async e=>{const b=e.target.closest('button'); if(!b)return;
     await moveTicket(t.id,b.dataset.s);
     el('dwSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
-  loadRepo(t.id); loadPdfs(t.id);            // the two wired context sections
+  loadRepo(t.id); loadPdfs(t.id); loadComparison(t.id);
+}
+
+// ---------- three-mode comparison (A3) ----------
+// Three real engine runs over one BUNDLED scripted task. The agent is a mock and
+// the human decisions are simulated; the effectiveness measurement is real. The
+// honest finding is that the two UNSTEERED modes tie — the UI says so out loud
+// rather than dressing up three different-looking numbers.
+const CMP_SHORT={hitl_no_comments:['1','reviews only'],
+                 hitl_comments:['2','reviews + comments'],
+                 autonomous:['3','autonomous']};
+let CMP_ES=null;
+const SCRIPTED_NOTE=`<div class="cmp-scripted"><b>Scripted comparison.</b> Three real runs of a
+  bundled task through the governed loop — effectiveness is measured by actually executing the
+  task's tests each turn. The agent is an offline mock and the human decisions are
+  <b>simulated</b> deterministically. With a scripted agent, good feedback is modelled as an
+  <b>up-front brief</b> (the compiled Field Guide); with a live agent the comment lands between
+  turns instead. It demonstrates the mechanism, not a live-agent benchmark.</div>`;
+
+async function loadComparison(tid){
+  if(!el('cmpBody')) return;
+  const r=await fetch(`/api/tickets/${tid}/comparison`);
+  if(!r.ok) return;
+  const d=await r.json();
+  if(!el('cmpBody')) return;
+  if(d.comparison && d.comparison.status==='running'){ renderCmpRunning(tid,d.comparison); watchCmp(tid); }
+  else if(d.comparison && d.comparison.status==='done') renderCmpResult(tid,d.comparison);
+  else renderCmpIdle(tid,d.tasks||[]);
+}
+function renderCmpIdle(tid,tasks){
+  const body=el('cmpBody'); if(!body) return;
+  body.innerHTML=`<p class="hint">Run the same bundled task three ways and compare what
+      human involvement actually changes.</p>
+    <div class="ctx-row">
+      <select id="cmpTask">${tasks.map(t=>`<option${t==='redact_pii'?' selected':''}>${esc(t)}</option>`).join('')}</select>
+      <button class="act go" id="cmpBtn" style="white-space:nowrap">Run comparison</button></div>
+    ${SCRIPTED_NOTE}`;
+  el('cmpBtn').onclick=()=>startCmp(tid);
+}
+function cmpRow(m){
+  const s=CMP_SHORT[m.mode]||['?',m.mode];
+  const label={queued:'queued',running:'running…',done:'done',error:'failed'}[m.status]||m.status;
+  return `<div class="cmp-mode ${m.status}${m.status==='running'?' on':''}">
+      <span class="mi">${s[0]}</span>
+      <span class="ml" title="${esc(m.blurb||'')}">${esc(m.label)}</span>
+      <span class="ms">${label}</span></div>`;
+}
+function renderCmpRunning(tid,c){
+  const body=el('cmpBody'); if(!body) return;
+  body.innerHTML=`<p class="hint">Running the three modes in sequence on
+      <span class="mono">${esc(c.task||'')}</span>…</p>
+    <div class="cmp-run">${c.modes.map(cmpRow).join('')}</div>${SCRIPTED_NOTE}`;
+}
+function renderCmpResult(tid,c){
+  const body=el('cmpBody'); if(!body) return;
+  const modes=c.modes, d=c.deltas||{};
+  const best=d.best_mode;
+  const rows=[
+    ['iterations', r=>r.iterations, 'low'],
+    ['effectiveness', r=>r.effectiveness, 'flat'],
+    ['cost', r=>'$'+Number(r.cost_usd).toFixed(2), 'low'],
+    ['operator q', r=>r.operator_quality, 'high'],
+  ];
+  const grid='<div class="cmp-grid"><div class="rk"></div>'+
+    modes.map(m=>{const s=CMP_SHORT[m.mode]||['?',m.mode];
+      return `<div class="hd${m.mode===best?' best':''}" onclick="showCmpTimeline('${esc(tid)}','${esc(m.mode)}')"
+        title="${esc(m.blurb||'')} — click for the run timeline">${s[0]} · ${esc(s[1])}
+        <span class="sub">${m.mode===best?'fastest':'baseline'}</span></div>`;}).join('')+
+    rows.map(([name,get,dir])=>`<div class="rk">${name}</div>`+
+      modes.map(m=>{const v=get(m.result||{});
+        const isBest=dir!=='flat'&&m.mode===best;
+        return `<div class="v${isBest?' best':''}">${esc(''+v)}</div>`;}).join('')).join('')+
+    '</div>';
+
+  const eq=d.unsteered_modes_equivalent;
+  const claim=`<div class="cmp-claim">
+      <b>Steering is what helped.</b> The reviewer who knew the trap converged in
+      ${d.steering_saved_iterations} fewer iteration${d.steering_saved_iterations===1?'':'s'}
+      and $${Number(d.steering_saved_cost||0).toFixed(2)} less.
+      <span class="eq">${eq
+        ? 'Modes 1 and 3 came out <b>identical</b> — a reviewer who adds no information adds no value.'
+        : 'Modes 1 and 3 differed, which this comparison does not expect — treat with suspicion.'}
+      ${d.effectiveness_equal?'All three reached the same effectiveness: steering changed the cost of getting there, not the outcome.':''}</span></div>`;
+
+  body.innerHTML=`<p class="hint">Same bundled task, three ways${c.task?` · <span class="mono">${esc(c.task)}</span>`:''}.
+      Click a column for its run timeline.</p>
+    ${grid}${claim}${SCRIPTED_NOTE}
+    <div class="ctx-row" style="margin-top:11px">
+      <button class="act ghost" id="cmpAgain">Run again</button></div>
+    <div id="cmpTl"></div>`;
+  el('cmpAgain').onclick=()=>startCmp(tid);
+  CMP_LAST[tid]=c;
+}
+const CMP_LAST={};
+async function startCmp(tid){
+  const btn=el('cmpBtn')||el('cmpAgain'); if(btn){btn.disabled=true;btn.textContent='Starting…';}
+  const task=el('cmpTask')?el('cmpTask').value:'redact_pii';
+  const r=await fetch(`/api/tickets/${tid}/comparison`,{method:'POST',
+    headers:{'content-type':'application/json'},body:JSON.stringify({task})});
+  if(!r.ok){ const d=await r.json().catch(()=>({}));
+    if(btn){btn.disabled=false;btn.textContent='Run comparison';}
+    ctxErr('cmpBody', d.detail||'could not start the comparison'); return; }
+  renderCmpRunning(tid, await r.json());
+  watchCmp(tid);
+}
+function watchCmp(tid){
+  if(CMP_ES) CMP_ES.close();
+  CMP_ES=new EventSource(`/api/tickets/${tid}/comparison/stream`);
+  CMP_ES.addEventListener('state', ev=>{
+    const c=JSON.parse(ev.data);
+    if(!el('cmpBody')) { CMP_ES.close(); return; }
+    if(c.status==='running') renderCmpRunning(tid,c);
+    else if(c.status==='done'){ CMP_ES.close(); renderCmpResult(tid,c); }
+    else if(c.status==='error'){ CMP_ES.close();
+      renderCmpIdle(tid,['redact_pii']); ctxErr('cmpBody', c.error||'the comparison failed'); }
+  });
+  CMP_ES.onerror=()=>{ CMP_ES.close(); };
+}
+async function showCmpTimeline(tid,mode){
+  const c=CMP_LAST[tid]; if(!c) return;
+  const m=c.modes.find(x=>x.mode===mode); if(!m||!m.result) return;
+  const host=el('cmpTl'); if(!host) return;
+  if(host.dataset.mode===mode){ host.innerHTML=''; host.dataset.mode=''; return; }  // toggle
+  host.dataset.mode=mode;
+  host.innerHTML=`<div class="cmp-tl"><div class="th"><b style="font-size:12.5px">${esc(m.label)}</b>
+      <span class="mono">${esc(m.result.brief_id)}</span></div>
+      <div class="tl" id="cmpTlBody"><div class="spin"><span class="s"></span>loading…</div></div></div>`;
+  const r=await fetch(`/api/briefs/${m.result.brief_id}/events`);
+  if(!r.ok || !el('cmpTlBody')) return;
+  renderTimeline('cmpTlBody',(await r.json()).events);
 }
 
 // ---------- ticket context: connected repo (A2) ----------
@@ -508,7 +633,9 @@ function syncPdfIds(tid,docs){
   if(t) t.pdf_context_ids=(docs||[]).map(p=>p.id);
 }
 function closeDrawer(){ const d=el('drawer'); if(d) d.remove();
-  const s=el('dscrim'); if(s) s.remove(); DRAWER_ID=null; }
+  const s=el('dscrim'); if(s) s.remove(); DRAWER_ID=null;
+  if(CMP_ES){ CMP_ES.close(); CMP_ES=null; }   // don't leave a stream open
+}
 // Step one of the delete: swap in the confirm, don't destroy anything yet.
 function armDelete(){
   const dz=el('dz'), id=DRAWER_ID; if(!dz||!id) return;

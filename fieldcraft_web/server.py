@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from fieldcraft_loop import comparison as cmp_mod
 from fieldcraft_loop import github_source, sandbox
 from fieldcraft_loop.engine import Engine, TERMINAL
 from fieldcraft_loop.pdf_context import PdfContextError, PdfStore
@@ -73,6 +74,11 @@ pdfs = PdfStore(DATA / "ticket_pdfs", max_mb=settings.max_pdf_mb,
                 max_pages=settings.max_pdf_pages,
                 max_per_ticket=settings.max_pdfs_per_ticket)
 TICKET_REPOS = DATA / "ticket_repos"
+# Live three-mode comparisons, keyed "<user>:<ticket>". In memory on purpose:
+# this is progress for a stream that lasts seconds. The *results* are durable —
+# they land on the ticket's runs[] as each mode finishes.
+COMPARISONS: dict[str, dict] = {}
+COMPARISON_LOCK = threading.Lock()
 
 app = FastAPI(title="Fieldcraft POC")
 app.add_middleware(CORSMiddleware,
@@ -495,6 +501,180 @@ def delete_ticket_pdf(tid: str, pdf_id: str, user: str = Depends(require_session
     if not pdfs.delete(user, tid, pdf_id):
         raise HTTPException(404, "unknown document")
     return {"ok": True, "pdfs": _sync_pdf_ids(tid, user)}
+
+
+# --- ticket context: the three-mode comparison (A3) -------------------------
+# Three real engine runs over one BUNDLED, SCRIPTED task, run sequentially. The
+# agent is a mock and the human decisions are simulated deterministically; the
+# effectiveness measurement is real (the task's tests actually execute). This is
+# never pointed at a connected repo or a live provider — that is Phase B.
+
+# Only bundled single-file tasks: they carry the Field Guide trap the steered
+# mode depends on, and none of them is user-supplied code.
+COMPARISON_TASKS = {n: p for n, (p, kind) in TASKS.items() if kind == "single"}
+DEFAULT_COMPARISON_TASK = "redact_pii"
+
+
+class RunComparison(BaseModel):
+    task: str = DEFAULT_COMPARISON_TASK
+
+
+def _cmp_key(tid: str, user: str) -> str:
+    return f"{user}:{tid}"
+
+
+def _blank_comparison(tid: str, task: str) -> dict:
+    return {"ticket": tid, "task": task, "status": "running", "started_at": time.time(),
+            "scripted": True,
+            "modes": [{"mode": m.key, "label": m.label, "blurb": m.blurb,
+                       "steered": m.steered, "status": "queued", "result": None}
+                      for m in cmp_mod.MODES]}
+
+
+def _persist_mode_result(tid: str, user: str, res: dict) -> None:
+    """Append this mode's run to the ticket, replacing any earlier run for the
+    same mode so re-running a comparison does not pile up stale entries."""
+    t = tickets.get(tid, user)
+    if not t:
+        return
+    runs = [r for r in (t.get("runs") or []) if r.get("mode") != res["mode"]]
+    runs.append({"brief_id": res["brief_id"], "mode": res["mode"],
+                 "provider": res["provider"], "at": res["at"], "result": res})
+    tickets.update(tid, user, runs=runs)
+
+
+@app.post("/api/tickets/{tid}/comparison")
+def start_comparison(tid: str, req: RunComparison, request: Request,
+                     user: str = Depends(require_session)):
+    """Run the same bundled task three ways, sequentially, in the background."""
+    _owned_ticket(tid, user)
+    if req.task not in COMPARISON_TASKS:
+        raise HTTPException(400, "the comparison runs on a bundled scripted task: "
+                                 + ", ".join(sorted(COMPARISON_TASKS)))
+    key = _cmp_key(tid, user)
+    with COMPARISON_LOCK:
+        cur = COMPARISONS.get(key)
+        if cur and cur["status"] == "running":
+            raise HTTPException(409, "a comparison is already running for this ticket")
+        COMPARISONS[key] = _blank_comparison(tid, req.task)
+
+    if not ledger.hit("comparison:" + client_ip(request)):
+        with COMPARISON_LOCK:
+            COMPARISONS.pop(key, None)
+        raise HTTPException(429, "rate limit: too many requests from your IP, try later")
+    if not conc.acquire():             # one slot for the whole sequential set
+        with COMPARISON_LOCK:
+            COMPARISONS.pop(key, None)
+        raise HTTPException(503, "too many concurrent runs; try again shortly")
+
+    task_dir = COMPARISON_TASKS[req.task]
+
+    def worker():
+        state = COMPARISONS.get(key)
+        try:
+            for mode in cmp_mod.MODES:
+                _set_mode(key, mode.key, "running", None)
+                # Each mode reserves like any other run. enforce_cost=False: these
+                # are offline mock costs, so they are accounted but cannot block.
+                res_id = ledger.reserve(user, client_ip(request), 2.0,
+                                        enforce_cost=False)
+                result = None
+                try:
+                    result = cmp_mod.run_mode(engine, mode, task_dir, req.task, user)
+                finally:
+                    if res_id.ok:
+                        ledger.settle(res_id.id, (result or {}).get("cost_usd", 0.0))
+                _persist_mode_result(tid, user, result)
+                _set_mode(key, mode.key, "done", result)
+            with COMPARISON_LOCK:
+                st = COMPARISONS.get(key)
+                if st:
+                    st["status"] = "done"
+                    st["deltas"] = cmp_mod.deltas([m["result"] for m in st["modes"]
+                                                   if m["result"]])
+                    st["finished_at"] = time.time()
+        except Exception as e:                     # never let the worker die quietly
+            log.exception("three-mode comparison failed for ticket %s", tid)
+            with COMPARISON_LOCK:
+                st = COMPARISONS.get(key)
+                if st:
+                    st["status"] = "error"
+                    st["error"] = f"{type(e).__name__}: {e}"
+                    for m in st["modes"]:
+                        if m["status"] in ("queued", "running"):
+                            m["status"] = "error"
+        finally:
+            conc.release()
+
+    threading.Thread(target=worker, daemon=True).start()
+    return COMPARISONS[key]
+
+
+def _set_mode(key: str, mode_key: str, status: str, result: dict | None) -> None:
+    with COMPARISON_LOCK:
+        st = COMPARISONS.get(key)
+        if not st:
+            return
+        for m in st["modes"]:
+            if m["mode"] == mode_key:
+                m["status"] = status
+                if result:
+                    m["result"] = result
+                    m["brief_id"] = result["brief_id"]
+
+
+def _comparison_from_ticket(tid: str, user: str) -> dict | None:
+    """Rebuild a finished comparison from what was persisted on the ticket, so a
+    reload (or a different browser) still sees the last result."""
+    t = tickets.get(tid, user)
+    if not t:
+        return None
+    by = {r.get("mode"): r for r in (t.get("runs") or []) if r.get("result")}
+    if not all(k in by for k in cmp_mod.MODE_KEYS):
+        return None
+    modes = []
+    for m in cmp_mod.MODES:
+        res = by[m.key]["result"]
+        modes.append({"mode": m.key, "label": m.label, "blurb": m.blurb,
+                      "steered": m.steered, "status": "done", "result": res,
+                      "brief_id": res["brief_id"]})
+    return {"ticket": tid, "task": None, "status": "done", "scripted": True,
+            "modes": modes, "deltas": cmp_mod.deltas([m["result"] for m in modes]),
+            "restored": True}
+
+
+@app.get("/api/tickets/{tid}/comparison")
+def get_comparison(tid: str, user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    live = COMPARISONS.get(_cmp_key(tid, user))
+    return {"comparison": live or _comparison_from_ticket(tid, user),
+            "tasks": sorted(COMPARISON_TASKS)}
+
+
+@app.get("/api/tickets/{tid}/comparison/stream")
+async def stream_comparison(tid: str, user: str = Depends(require_session)):
+    """Progress for the running comparison: one `state` event per change."""
+    import asyncio
+    _owned_ticket(tid, user)                     # 404 before a byte is streamed
+    key = _cmp_key(tid, user)
+
+    async def gen():
+        last = None
+        for _ in range(1200):                    # ~6 min ceiling
+            st = COMPARISONS.get(key)
+            if not st:
+                yield _sse("state", {"status": "idle"}); return
+            snap = json.dumps(st, sort_keys=True, default=str)
+            if snap != last:
+                yield _sse("state", st)
+                last = snap
+            if st["status"] in ("done", "error"):
+                return
+            await asyncio.sleep(0.3)
+        yield _sse("state", {"status": "timeout"})
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/tasks")

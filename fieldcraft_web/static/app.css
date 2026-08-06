@@ -333,6 +333,53 @@ body.dragging .col-empty{display:none}
 .drop input{display:none}
 .drop.busy{opacity:.55;pointer-events:none}
 
+/* ---------- three-mode comparison (A3) ---------- */
+.cmp-run{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.cmp-mode{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);
+  border-radius:10px;background:var(--bg-3);transition:border-color var(--fast) var(--ease)}
+.cmp-mode.on{border-color:var(--teal-line);background:var(--teal-dim)}
+.cmp-mode .mi{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;flex:none;
+  background:var(--glass-2);font:700 10px var(--mono);color:var(--faint)}
+.cmp-mode .ml{flex:1;min-width:0;font-size:12.5px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmp-mode .ms{flex:none;font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint)}
+.cmp-mode.running .ms{color:var(--blue)}
+.cmp-mode.done .ms{color:var(--teal)}
+.cmp-mode.error .ms{color:var(--red)}
+
+/* metric-major grid: rows are metrics, columns are modes — a real side-by-side */
+.cmp-grid{display:grid;grid-template-columns:auto repeat(3,1fr);gap:0;margin-top:12px;
+  border:1px solid var(--line);border-radius:11px;overflow:hidden;font-size:12px}
+.cmp-grid>div{padding:8px 9px;border-bottom:1px solid var(--line);min-width:0}
+.cmp-grid>div:nth-child(4n){border-right:0}
+.cmp-grid .hd{background:var(--glass-2);font:600 10px var(--mono);letter-spacing:.06em;
+  color:var(--ink);cursor:pointer;transition:background var(--fast) var(--ease)}
+.cmp-grid .hd:hover{background:var(--glass-3)}
+.cmp-grid .hd.best{background:var(--teal-dim);color:var(--teal)}
+.cmp-grid .hd .sub{display:block;font:500 9px var(--mono);color:var(--faint);
+  letter-spacing:.04em;margin-top:2px;text-transform:uppercase}
+.cmp-grid .hd.best .sub{color:var(--teal)}
+.cmp-grid .rk{font:500 10px var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--faint);background:var(--glass);white-space:nowrap}
+.cmp-grid .v{font:600 12.5px var(--mono);color:var(--mut);text-align:right}
+.cmp-grid .v.best{color:var(--teal)}
+.cmp-grid .v.same{color:var(--mut)}
+.cmp-grid>div:nth-last-child(-n+4){border-bottom:0}
+
+.cmp-claim{margin-top:11px;padding:10px 12px;border-radius:9px;font-size:12.5px;line-height:1.55;
+  background:var(--teal-dim);border-left:3px solid var(--teal);color:var(--ink)}
+.cmp-claim b{color:var(--teal)}
+.cmp-claim .eq{display:block;margin-top:5px;color:var(--mut)}
+/* the honesty label — not decorative, and deliberately not styled away */
+.cmp-scripted{margin-top:11px;padding:10px 12px;border-radius:9px;font-size:12px;line-height:1.6;
+  background:var(--amber-dim);border-left:3px solid var(--amber);color:var(--mut)}
+.cmp-scripted b{color:var(--amber)}
+.cmp-tl{margin-top:12px;border:1px solid var(--line);border-radius:11px;padding:14px 14px 4px;
+  background:var(--bg-3)}
+.cmp-tl .th{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.cmp-tl .th .mono{font-size:11px;color:var(--faint)}
+
 /* same single provisional treatment as .col-empty — dashed hairline, no hatch */
 .soon-block{border:1px dashed var(--line);border-radius:12px;padding:14px 16px;margin-top:12px;
   background:var(--glass)}
