@@ -350,3 +350,83 @@ def test_the_stream_endpoint_really_replays_from_the_start():
         with c.stream("GET", f"/api/briefs/{bid}/stream") as s:
             seen.append("".join(s.iter_text()).count("event: event"))
     assert seen[0] == seen[1] > 0, "each connection replays the whole log"
+
+
+# =============================================================================
+# B4b: History and Reports re-skinned, and kept separate
+# =============================================================================
+
+def test_history_labels_each_run_by_kind():
+    """The run_kind/comparison_mode fields B1 added are what let History say what
+    a run actually was; before this it could not tell them apart."""
+    assert "const RUN_KINDS=" in INDEX
+    for k in ("ticket_single", "comparison", "brief"):
+        assert k in INDEX
+    assert "r.run_kind" in INDEX and "r.comparison_mode" in INDEX
+
+
+def test_history_speaks_plainly():
+    i = INDEX.index('<section id="v-history"')
+    hist = INDEX[i:INDEX.index("</section>", i)]
+    assert "Your runs" in hist
+    assert "event store" not in hist.lower(), "no engine jargon on History"
+    assert "brief" not in hist.lower()
+
+
+def test_history_has_an_empty_state_pointing_somewhere_useful():
+    assert "haven't run anything yet" in INDEX
+    assert "hist-empty" in INDEX
+    block = INDEX[INDEX.index("hist-empty"):][:600]
+    assert "nav('board')" in block and "nav('tryit')" in block
+
+
+def test_history_still_drills_into_the_timeline():
+    assert "function openBrief(bid)" in INDEX
+    assert "renderTimeline('histTl'" in INDEX
+
+
+def test_reports_says_it_is_not_your_runs():
+    """The one thing most likely to be misread: Reports is fixture demos, History
+    is real user activity. It must be stated, not implied."""
+    i = INDEX.index('<section id="v-reports"')
+    rep = INDEX[i:INDEX.index("</section>", i)]
+    assert "not your work" in rep.lower()
+    assert "nav('history')" in rep, "it should point at where the user's own runs are"
+    assert "reference tasks" in rep
+
+
+def test_reports_drops_the_raw_jargon_as_labels():
+    i = INDEX.index('<section id="v-reports"')
+    rep = INDEX[i:INDEX.index("</section>", i)]
+    for jargon in ("Measurement science", "Field Guide flywheel", "LLM-as-judge",
+                   "Benchmark"):
+        assert jargon not in rep, f"{jargon!r} should not be a primary label"
+    # ...but the four reports are all still reachable
+    for kind in ("benchmark", "measurement", "flywheel", "governance"):
+        assert f"loadReport('{kind}')" in rep
+
+
+def test_reports_still_computes_the_same_four_things():
+    """Re-framing must not have changed what is computed."""
+    assert set(server._REPORT_FNS) == {"benchmark", "measurement", "flywheel", "governance"}
+
+
+def test_history_and_reports_are_still_separate_views():
+    assert 'id="v-history"' in INDEX and 'id="v-reports"' in INDEX
+    assert "'history'" in INDEX and "'reports'" in INDEX
+
+
+def test_the_try_it_gate_panel_reads_real_policy_events():
+    """The gate panel must be built from the runs' own events, not asserted."""
+    assert "function renderTryGate(id, c)" in INDEX
+    block = INDEX[INDEX.index("async function renderTryGate"):][:900]
+    assert "/events" in block and "e.type==='policy'" in block
+    assert "payload.violations" in block and "payload.reverted" in block
+
+
+def test_history_labels_a_comparison_leg_even_without_the_run_kind_tag():
+    """Runs recorded before B1.5 added run_kind carry only comparison_mode. They
+    are still comparison legs and must not be listed as single runs."""
+    block = INDEX[INDEX.index("async function loadHistory()"):][:1600]
+    assert "r.comparison_mode ? 'comparison'" in block, (
+        "comparison_mode must take precedence over run_kind when labelling")

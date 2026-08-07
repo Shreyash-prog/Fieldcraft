@@ -31,6 +31,9 @@ CURATED: tuple[tuple[str, Path], ...] = (
     ("redact_pii", _ROOT / "sample_task"),
     ("parse_bool", _ROOT / "tasks" / "parse_bool"),
     ("truncate_words", _ROOT / "tasks" / "truncate_words"),
+    # The one that demonstrates the other half of the product: the catch here is
+    # a policy violation, and the lesson is that the gate caught it.
+    ("secure_api_key", _ROOT / "tasks" / "secure_api_key"),
 )
 TASK_IDS = tuple(name for name, _ in CURATED)
 STORY_FIELDS = ("title", "goal", "catch", "steering")
@@ -38,6 +41,15 @@ STORY_FIELDS = ("title", "goal", "catch", "steering")
 
 def task_dir(task_id: str) -> Path | None:
     return dict(CURATED).get(task_id)
+
+
+def _policy_of(task_dir: Path) -> dict | None:
+    """The governance policy a task declares, if any (stored-intent shape)."""
+    import json
+    try:
+        return json.loads((task_dir / "task.json").read_text()).get("policy")
+    except (OSError, ValueError):
+        return None
 
 
 def story_for(task_id: str) -> dict | None:
@@ -53,6 +65,11 @@ def story_for(task_id: str) -> dict | None:
             "catch": s["catch"], "steering": s["steering"],
             "why_it_matters": s.get("why_it_matters", ""),
             "featured": bool(s.get("featured", False)),
+            # "measure" (steering changes efficiency) or "govern" (the gate
+            # catches a violation). The playground applies `policy` to the
+            # ticket before running a govern task, so the enforcement is real.
+            "kind": s.get("kind", "measure"),
+            "policy": t.story.get("policy") or _policy_of(d),
             # Surfaced so the UI can say *which* words the steering brief carried
             # — the mechanism, not a claim about it.
             "trap_keywords": list(t.trap_keywords)}

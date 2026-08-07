@@ -41,8 +41,9 @@
     <!-- TRY IT -->
     <section id="v-tryit" class="hide">
       <h1 class="head">Try it</h1>
-      <p class="sub">Four small tasks, each with a catch a first attempt misses. Run one three ways
-         and watch what changes when the reviewer already knows the catch.</p>
+      <p class="sub">Small tasks, each with a catch a first attempt misses. Run one three ways and watch
+         what changes when the reviewer already knows the catch — or when the governance
+         gate catches it.</p>
       <div id="tryBody"><div class="spin"><span class="s"></span>loading…</div></div>
     </section>
 
@@ -94,9 +95,9 @@
         <div class="card ov-cta">
           <p class="fam">Start here</p>
           <h2>Try it</h2>
-          <p class="muted">Four small tasks, each with a catch a first attempt misses. Run one
-             three ways and watch what changes when the reviewer already knows the catch —
-             it takes a few seconds and needs nothing set up.</p>
+          <p class="muted">Small tasks, each with a catch a first attempt misses — including one
+             where the catch is something the rules forbid, and the gate stops it. A few seconds
+             each, nothing to set up.</p>
           <button class="act go" onclick="nav('tryit')">Show me →</button>
         </div>
         <div class="card ov-cta">
@@ -117,23 +118,48 @@
 
     <!-- HISTORY -->
     <section id="v-history" class="hide">
-      <h1 class="head">Run history</h1>
-      <p class="sub">Every run is durable in the event store. Click one to replay its timeline.</p>
+      <h1 class="head">Your runs</h1>
+      <p class="sub">Every piece of work you've actually run here — what it was, how it was run,
+         and how it turned out. Click any run to see exactly what happened, step by step.</p>
       <div class="card"><div id="histBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
-      <div class="card hide" id="histDetail"><p class="fam">Replay · <span class="mono" id="histBid"></span></p><div class="tl" id="histTl"></div></div>
+      <div class="card hide" id="histDetail">
+        <p class="fam">What happened · <span class="mono" id="histBid"></span></p>
+        <div class="tl" id="histTl"></div></div>
     </section>
 
     <!-- REPORTS -->
     <section id="v-reports" class="hide">
-      <h1 class="head">Reports</h1>
-      <p class="sub">The differentiators — computed by the real offline pipelines (scripted agents), cached after first load.</p>
-      <div class="card">
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="act ghost" onclick="loadReport('benchmark')">Benchmark</button>
-          <button class="act ghost" onclick="loadReport('measurement')">Measurement science</button>
-          <button class="act ghost" onclick="loadReport('flywheel')">Field Guide flywheel</button>
-          <button class="act ghost" onclick="loadReport('governance')">Governance</button>
-        </div>
+      <h1 class="head">What we can show</h1>
+      <p class="sub">Four things Fieldcraft can demonstrate about measuring and governing
+         AI-assisted work. Each one is computed fresh from a set of reference tasks that ship
+         with the product — pick one to run it.</p>
+      <div class="rep-note">
+        <b>These are demonstrations, not your work.</b> Every number below comes from
+        reference tasks run on demand — it is the evidence that the measurement and the
+        governance do what they claim. For the runs <i>you</i> have done, see
+        <button class="linkbtn" onclick="nav('history')">Your runs</button>.
+      </div>
+      <div class="rep-grid">
+        <button class="rep-card measure" onclick="loadReport('benchmark')">
+          <span class="ov-tag">Measure</span>
+          <b>Does better direction actually help?</b>
+          <i>The same tasks, done with and without knowing the catch up front — and what that
+             difference costs in attempts and money.</i></button>
+        <button class="rep-card measure" onclick="loadReport('measurement')">
+          <span class="ov-tag">Measure</span>
+          <b>Can we trust the numbers?</b>
+          <i>The measurement checked against itself: how big the effect is, how consistent, and
+             whether the sample is large enough to claim it.</i></button>
+        <button class="rep-card measure" onclick="loadReport('flywheel')">
+          <span class="ov-tag">Measure</span>
+          <b>Does it get better with use?</b>
+          <i>What one run learns about a task, written down and handed to the next run — and
+             whether the next run is actually faster for it.</i></button>
+        <button class="rep-card govern" onclick="loadReport('governance')">
+          <span class="ov-tag">Govern</span>
+          <b>Does the gate really stop things?</b>
+          <i>An agent that tries to commit a credential, and what the policy does about it —
+             caught, undone, and recorded.</i></button>
       </div>
       <div id="reportBody"></div>
     </section>
@@ -268,7 +294,7 @@ function renderTryTask(id, comparison){
   const t=tryTask(id); if(!t) return;
   const host=el('tryBody'); if(!host) return;
   host.innerHTML=`
-    <button class="linkbtn" onclick="renderTryMenu()">← all four tasks</button>
+    <button class="linkbtn" onclick="renderTryMenu()">← all tasks</button>
     <div class="card try-story">
       <div class="sh"><h2>${esc(t.title)}</h2>${t.featured?'<span class="feat-tag">start here</span>':''}</div>
       <dl class="story">
@@ -311,6 +337,13 @@ async function runTry(id){
   try{ tid=await tryTicketFor(id); }
   catch(e){ btn.disabled=false; btn.textContent='Run all three modes';
     msg.style.color='var(--red)'; msg.textContent='could not start: '+e; return; }
+  // A govern task carries its own policy. Put it on the ticket first, so the
+  // enforcement that runs is the real per-ticket governance — not a special case.
+  const task=tryTask(id);
+  if(task && task.policy){
+    await fetch(`/api/tickets/${tid}/governance`,{method:'PUT',
+      headers:{'content-type':'application/json'},body:JSON.stringify({policy:task.policy})});
+  }
   const r=await fetch(`/api/tickets/${tid}/comparison`,{method:'POST',
     headers:{'content-type':'application/json'},body:JSON.stringify({task:id})});
   if(!r.ok){ const d=await r.json().catch(()=>({}));
@@ -361,7 +394,7 @@ function renderTryComparison(id, c){
       for the same effectiveness.</span></div>`;
 
   host.innerHTML=`<div class="card"><p class="fam">Three ways · same task</p>
-      ${grid}${taught}
+      ${grid}${t.kind==='govern'?'<div id="tryGate"></div>':''}${taught}
       <div class="cmp-claim" style="margin-top:10px">
         <b>Modes 1 and 3 tied.</b>
         <span class="eq">A reviewer who only approves adds nothing an autonomous run
@@ -369,8 +402,40 @@ function renderTryComparison(id, c){
       ${SCRIPTED_NOTE}
       <div id="tryTl"></div></div>`;
   TRY_LAST[id]=c;
+  if(t.kind==='govern') renderTryGate(id, c);
 }
 const TRY_LAST={};
+
+// For a govern task, say what the gate actually did — read from each run's real
+// policy events, not from anything the comparison asserted about itself.
+async function renderTryGate(id, c){
+  const host=el('tryGate'); if(!host) return;
+  const rows=[];
+  for(const m of c.modes){
+    if(!m.result) continue;
+    const r=await fetch(`/api/briefs/${m.result.brief_id}/events`);
+    if(!r.ok) continue;
+    const ev=(await r.json()).events.filter(e=>e.type==='policy');
+    const viol=ev.flatMap(e=>e.payload.violations||[]);
+    const rev=ev.flatMap(e=>e.payload.reverted||[]);
+    rows.push({mode:m.mode, label:(CMP_SHORT[m.mode]||['?',m.mode]).join(' · '),
+               viol:viol.length, rev, why:viol[0]?viol[0].reason:''});
+  }
+  if(!el('tryGate')) return;
+  const caught=rows.filter(r=>r.viol>0);
+  host.innerHTML=`<div class="gate-box">
+    <div class="gh">⚖︎ What the governance gate did</div>
+    <div class="grows">${rows.map(r=>`<div class="grow ${r.viol?'hit':'ok'}">
+        <span class="gm">${esc(r.label)}</span>
+        <span class="gv">${r.viol
+          ? `caught ${r.viol} violation${r.viol===1?'':'s'} — reverted <span class="mono">${esc(r.rev.join(', '))}</span>`
+          : 'nothing to catch — the change was clean'}</span></div>`).join('')}</div>
+    <p class="gnote">${caught.length
+      ? `The unsteered runs shipped a hardcoded key. Every test still passed — the gate is what
+         caught it, undid the change, and made the run come back with the safe version.
+         The steered run knew the rule up front and never tripped it.`
+      : `No violation occurred in this run.`}</p></div>`;
+}
 async function showTryTimeline(id, mode){
   const c=TRY_LAST[id]; if(!c) return;
   const m=c.modes.find(x=>x.mode===mode); if(!m||!m.result) return;
@@ -1280,13 +1345,51 @@ function verdictBlock(p){
   return h;
 }
 // ---------- history ----------
+// How a run was started, in the user's words. run_kind/comparison_mode come from
+// the run's own config (B1), so this is what it actually was, not a guess.
+const RUN_KINDS={
+  ticket_single:['single run','one governed run on a ticket'],
+  comparison:['comparison','one leg of a three-way comparison'],
+  brief:['single run','a run started directly']};
+const OUTCOMES={
+  done:['done','done','finished and approved'],
+  needs_human:['stop','needs you','stopped and is waiting for a person'],
+  error:['stop','failed','the run itself broke'],
+  awaiting_review:['rev','waiting for you','paused for your review'],
+  running:['run','running','still working']};
+
 async function loadHistory(){
   const b=(await (await fetch('/api/briefs')).json()).briefs;
-  if(!b.length){el('histBody').innerHTML='<p class="muted">No runs yet — start one from “Run a task”.</p>';return;}
-  el('histBody').innerHTML=`<table><tr><th>brief</th><th>task</th><th>agent</th><th>status</th><th>iters</th><th>cost</th><th>policy</th></tr>`+
-    b.map(r=>`<tr class="click" onclick="openBrief('${r.brief_id}')"><td>${r.brief_id}</td><td>${esc(r.task)}</td><td>${esc(r.adapter)}</td>
-      <td><span class="pill ${({done:'done',needs_human:'stop',error:'stop',awaiting_review:'rev',running:'run'})[r.status]||''}">${esc(r.status)}</span></td>
-      <td>${r.iteration}</td><td>$${r.cost}</td><td>${r.policy?'✓':'—'}</td></tr>`).join('')+`</table>`;
+  if(!b.length){
+    el('histBody').innerHTML=`<div class="hist-empty">
+      <p><b>You haven't run anything yet.</b></p>
+      <p class="muted">Open a ticket on the board and run it, or try one of the sample tasks
+         to see how this works.</p>
+      <div class="ctx-row" style="margin-top:14px">
+        <button class="act go" onclick="nav('board')">Go to the board</button>
+        <button class="act ghost" onclick="nav('tryit')">Try a sample task</button></div></div>`;
+    return;
+  }
+  el('histBody').innerHTML=
+    `<p class="fam">${b.length} run${b.length===1?'':'s'}</p>
+     <table class="hist"><tr><th>what ran</th><th>how</th><th>outcome</th>
+       <th>attempts</th><th>cost</th><th>governed</th></tr>`+
+    b.map(r=>{
+      // comparison_mode is the definitive marker of a comparison leg and predates
+      // run_kind (B1.5), so runs recorded before that tag existed still label
+      // correctly instead of being called single runs.
+      const kindKey = r.comparison_mode ? 'comparison' : (r.run_kind||'brief');
+      const k=RUN_KINDS[kindKey]||RUN_KINDS.brief;
+      const o=OUTCOMES[r.status]||['','?',''];
+      const mode=r.comparison_mode&&CMP_SHORT[r.comparison_mode]
+        ? ` · ${CMP_SHORT[r.comparison_mode][1]}` : '';
+      return `<tr class="click" onclick="openBrief('${r.brief_id}')" title="${esc(k[1])}">
+        <td><b>${esc(r.task||'—')}</b><span class="sub2">${esc(r.brief_id)}</span></td>
+        <td><span class="kind k-${esc(kindKey)}">${esc(k[0])}</span>${esc(mode)}</td>
+        <td><span class="pill ${o[0]}" title="${esc(o[2])}">${esc(o[1])}</span></td>
+        <td>${r.iteration}</td><td>$${r.cost}</td>
+        <td>${r.policy?'<span class="gov-yes">⚖︎ yes</span>':'<span class="muted">—</span>'}</td></tr>`;
+    }).join('')+`</table>`;
 }
 async function openBrief(bid){
   el('histDetail').classList.remove('hide'); el('histBid').textContent=bid;
@@ -1313,27 +1416,27 @@ const RENDER={
         <div style="width:20px;background:var(--amber);height:${bh}px;border-radius:3px"></div>
         <div style="width:20px;background:var(--teal);height:${gh}px;border-radius:3px"></div></div>
         <div class="mono" style="font-size:11px;color:var(--mut);margin-top:4px">${esc(r.task)}</div></div>`;}).join('');
-    el('reportBody').innerHTML=card(`<p class="fam">Benchmark · blind vs Field-Guide-guided</p>`+
-      metricRow([['tasks',a.tasks],['avg iterations',`${a.avg_blind_iters} → ${a.avg_guided_iters}`],['convergence speedup',a.iters_speedup+'×'],['tasks improved',`${a.tasks_improved}/${a.tasks}`]])+
-      `<div class="mt" style="display:flex;gap:10px">${bars}</div><p class="mono muted" style="margin-top:8px;font-size:11px">■ blind &nbsp;<span style="color:var(--teal)">■</span> guided</p>`)+
-      card(`<p class="fam">Per task</p><table><tr><th>task</th><th>blind iters</th><th>guided iters</th><th>blind $</th><th>guided $</th></tr>`+
+    el('reportBody').innerHTML=card(`<p class="fam">Does better direction actually help?</p>`+
+      metricRow([['tasks tried',a.tasks],['attempts needed',`${a.avg_blind_iters} → ${a.avg_guided_iters}`],['times faster',a.iters_speedup+'×'],['tasks improved',`${a.tasks_improved}/${a.tasks}`]])+
+      `<div class="mt" style="display:flex;gap:10px">${bars}</div><p class="mono muted" style="margin-top:8px;font-size:11px">■ without the catch known &nbsp;<span style="color:var(--teal)">■</span> with it known up front</p>`)+
+      card(`<p class="fam">Task by task</p><table><tr><th>task</th><th>attempts, unaided</th><th>attempts, directed</th><th>cost, unaided</th><th>cost, directed</th></tr>`+
         rows.map(r=>`<tr><td>${esc(r.task)}</td><td>${r.blind_iters}</td><td>${r.guided_iters}</td><td>$${r.blind_cost}</td><td>$${r.guided_cost}</td></tr>`).join('')+`</table>`);},
   measurement(d){const e=d.effect;const sig=e.significant_05?'significant':`NOT significant at N=${e.n} (need N≥${e.min_n_for_sig})`;
-    el('reportBody').innerHTML=card(`<p class="fam">Field Guide effect · efficiency captured</p>`+
-      metricRow([['mean effect','+'+e.mean],['95% CI',`[${e.ci95[0]}, ${e.ci95[1]}]`],['consistency',`${e.n_positive}/${e.n}`],['sign-test p',e.sign_test_p]])+
-      `<div class="flag"><b>Honest read.</b> Consistent (${e.n_positive}/${e.n}) and sizable (+${e.mean}), but ${esc(sig)}. The framework reports this rather than overclaiming.</div>`)+
-      card(`<p class="fam">Per-task scorecards</p><table><tr><th>task</th><th>condition</th><th>effectiveness</th><th>valid</th><th>eff captured</th><th>operator q</th></tr>`+
+    el('reportBody').innerHTML=card(`<p class="fam">Can we trust the numbers?</p>`+
+      metricRow([['average gain','+'+e.mean],['likely range',`${e.ci95[0]} to ${e.ci95[1]}`],['held up in',`${e.n_positive}/${e.n} tasks`],['chance result?',e.sign_test_p]])+
+      `<div class="flag"><b>The honest read.</b> The gain showed up in ${e.n_positive} of ${e.n} tasks and is sizeable (+${e.mean}) — but ${esc(sig)}. We report that rather than rounding it up into a claim.</div>`)+
+      card(`<p class="fam">Task by task</p><table><tr><th>task</th><th>how it was run</th><th>did it work</th><th>trustworthy</th><th>efficiency</th><th>how well driven</th></tr>`+
         d.scorecards.map(c=>`<tr><td>${esc(c.task)}</td><td>${esc(c.condition)}</td><td>${c.effectiveness}</td><td>${c.valid?'✓':'✗'}</td><td>${c.efficiency_captured}</td><td>${c.operator_quality}</td></tr>`).join('')+`</table>`);},
-  flywheel(d){el('reportBody').innerHTML=card(`<p class="fam">Field Guide flywheel · learns from a run</p>`+
-    metricRow([['run 1 (blind)',d.run1_iterations+' iters'],['run 2 (learned)',d.run2_iterations+' iters'],['speedup',(d.run1_iterations-d.run2_iterations)+' iter faster']])+
-    `<div class="mt"><div class="l muted">proposed &amp; approved trap</div>`+
+  flywheel(d){el('reportBody').innerHTML=card(`<p class="fam">Does it get better with use?</p>`+
+    metricRow([['first run',d.run1_iterations+' attempts'],['next run',d.run2_iterations+' attempts'],['improvement',(d.run1_iterations-d.run2_iterations)+' fewer attempt']])+
+    `<div class="mt"><div class="l muted">what it learned and wrote down</div>`+
     d.proposals.map(p=>`<div class="crit"><span class="mark info">LEARNED</span><span class="ev2">${esc(p)}</span></div>`).join('')+
-    `</div><div class="flag">A blind run hit the trap, proposed it back into the guide, and the next run converged faster — self-improvement.</div>`);},
-  governance(d){const g=d.governance;el('reportBody').innerHTML=card(`<p class="fam">Governance · policy enforcement</p>`+
-    metricRow([['run',d.final_state],['files reverted',g.files_reverted.length],['violations',g.violations.length]])+
+    `</div><div class="flag">The first run hit the catch, wrote down what it learned, and the next run — given that note up front — got there in fewer attempts.</div>`);},
+  governance(d){const g=d.governance;el('reportBody').innerHTML=card(`<p class="fam">Does the gate really stop things?</p>`+
+    metricRow([['the run',d.final_state],['changes undone',g.files_reverted.length],['rules broken',g.violations.length]])+
     `<div class="mt">`+g.violations.map(v=>`<div class="crit"><span class="mark fail">${esc(v.kind)}</span><span class="ev2">${esc(v.ref)} — ${esc(v.reason)}</span></div>`).join('')+`</div>`+
-    `<div class="flag">An agent tried to commit a hardcoded secret; policy reverted it and the run still converged on the legit fix.</div>`)+
-    card(`<p class="fam">Scoped credentials · least privilege</p><p class="mono muted" style="font-size:12px">grant scope: ${esc(d.grant_scope.join(', '))}</p>`+
+    `<div class="flag">The agent tried to commit a hardcoded credential. The policy caught it, undid the change, and the run still finished with a clean fix — the gate stopped the unsafe thing without stopping the work.</div>`)+
+    card(`<p class="fam">And what an agent is allowed to reach</p><p class="mono muted" style="font-size:12px">grant scope: ${esc(d.grant_scope.join(', '))}</p>`+
     d.credential_checks.map(c=>`<div class="crit"><span class="mark ${c.allowed?'pass':'fail'}">${c.allowed?'ALLOW':'DENY'}</span><span class="ev2">${esc(c.cap)}</span></div>`).join('')+
     `<p class="muted" style="font-size:12px;margin-top:8px">audit entries: ${d.audit_entries}</p>`);}
 };

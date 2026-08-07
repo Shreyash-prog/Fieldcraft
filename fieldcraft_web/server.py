@@ -55,6 +55,7 @@ TASKS = {
     "chunk": (ROOT / "tasks" / "chunk", "single"),
     "normalize_csv_row": (ROOT / "tasks" / "normalize_csv_row", "single"),
     "truncate_words": (ROOT / "tasks" / "truncate_words", "single"),
+    "secure_api_key": (ROOT / "tasks" / "secure_api_key", "single"),
     "textkit (multi-file repo)": (ROOT / "repo_tasks" / "textkit", "repo"),
 }
 

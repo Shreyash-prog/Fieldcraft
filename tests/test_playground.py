@@ -21,7 +21,12 @@ from fieldcraft_web import server
 from fieldcraft_web.auth import COOKIE, Auth
 
 CODES = "alpha-code,beta-code"
+# The four "measure" tasks: their trap is a *correctness* bug, so the turn-1
+# attempt fails the tests. The govern task is deliberately different — its
+# naive attempt passes every test and is caught by the policy instead — so it
+# is excluded from the parametrisations that assert a failing first attempt.
 EXPECTED = ("normalize_csv_row", "redact_pii", "parse_bool", "truncate_words")
+ALL_TASKS = EXPECTED + ("secure_api_key",)
 
 
 @pytest.fixture(autouse=True)
@@ -60,13 +65,13 @@ def run_pytest_on(task: Task, source, tmp_path) -> tuple[int, int]:
 
 # --- the catalogue -----------------------------------------------------------
 
-def test_all_four_curated_tasks_exist():
-    assert playground.TASK_IDS == EXPECTED
+def test_the_curated_tasks_exist():
+    assert playground.TASK_IDS == ALL_TASKS
 
 
 def test_every_curated_task_has_a_complete_story():
     cat = playground.catalogue()
-    assert len(cat) == 4
+    assert len(cat) == len(ALL_TASKS)
     for s in cat:
         for f in ("id", "title", "goal", "catch", "steering"):
             assert s.get(f), f"{s.get('id')} is missing {f}"
@@ -148,10 +153,10 @@ def test_the_naive_cleaner_really_double_converts(tmp_path):
 
 # --- the API -----------------------------------------------------------------
 
-def test_the_api_returns_all_four_with_stories():
+def test_the_api_returns_every_task_with_its_story():
     c = TestClient(server.app)
     body = c.get("/api/playground/tasks").json()
-    assert [t["id"] for t in body["tasks"]] == list(EXPECTED)
+    assert [t["id"] for t in body["tasks"]] == list(ALL_TASKS)
     assert body["featured"] == "normalize_csv_row"
     for t in body["tasks"]:
         assert t["goal"] and t["catch"] and t["steering"]
@@ -160,8 +165,8 @@ def test_the_api_returns_all_four_with_stories():
 def test_every_curated_task_is_actually_runnable():
     """A story for a task the comparison endpoint would reject is a dead end."""
     body = TestClient(server.app).get("/api/playground/tasks").json()
-    assert set(body["runnable"]) == set(EXPECTED)
-    for tid in EXPECTED:
+    assert set(body["runnable"]) == set(ALL_TASKS)
+    for tid in ALL_TASKS:
         assert tid in server.COMPARISON_TASKS
 
 
@@ -226,3 +231,128 @@ def test_the_playground_adds_no_runtime_dependency():
     src = (playground._ROOT / "fieldcraft_loop" / "playground.py").read_text()
     for forbidden in ("import requests", "import httpx", "import yaml", "import numpy"):
         assert forbidden not in src
+
+
+# =============================================================================
+# B4b: the govern task — the catch is a policy violation, and the gate is real
+# =============================================================================
+
+def test_the_governance_task_exists_with_its_story():
+    s = playground.story_for("secure_api_key")
+    assert s and s["kind"] == "govern"
+    assert "secure_api_key" in playground.TASK_IDS
+    for f in ("title", "goal", "catch", "steering"):
+        assert s[f]
+    assert "hardcoded" in s["catch"].lower() or "paste" in s["catch"].lower()
+
+
+def test_it_is_the_only_govern_task_and_the_others_are_measure():
+    kinds = {s["id"]: s["kind"] for s in playground.catalogue()}
+    assert kinds["secure_api_key"] == "govern"
+    assert all(v == "measure" for k, v in kinds.items() if k != "secure_api_key")
+
+
+def test_the_govern_task_declares_the_policy_it_needs():
+    s = playground.story_for("secure_api_key")
+    assert s["policy"]["forbid"]["secrets"] is True, (
+        "the playground applies this to the ticket, so it must be declared")
+    assert playground.story_for("normalize_csv_row")["policy"] is None
+
+
+def test_the_tests_do_not_catch_the_hardcoded_key(tmp_path):
+    """The whole lesson. Both implementations pass the suite — a green test run
+    says nothing about whether the code is safe to ship."""
+    t = Task.load(playground.task_dir("secure_api_key"))
+    naive_p, naive_f = run_pytest_on(t, t.stage_path(0), tmp_path)
+    clean_p, clean_f = run_pytest_on(t, t.solution_path(), tmp_path)
+    assert naive_f == 0 and naive_p > 0, "the naive attempt should pass every test"
+    assert clean_f == 0 and clean_p == naive_p
+
+
+def test_the_naive_attempt_really_contains_a_credential():
+    src = Task.load(playground.task_dir("secure_api_key")).stage_path(0).read_text()
+    assert "AKIA" in src, "the trap must actually be a hardcoded secret"
+    assert "AKIA" not in Task.load(
+        playground.task_dir("secure_api_key")).solution_path().read_text()
+
+
+def test_the_real_gate_catches_it_and_the_clean_fix_passes(tmp_path):
+    """Uses fieldcraft_gov directly — the same enforcement the engine calls."""
+    import difflib
+    from fieldcraft_gov.enforce import enforce
+    from fieldcraft_gov.policy import Policy
+    from fieldcraft_web import governance
+
+    t = Task.load(playground.task_dir("secure_api_key"))
+    pol = Policy.from_dict(governance.compile_policy(playground.story_for("secure_api_key")["policy"]))
+    base = (playground.task_dir("secure_api_key") / t.target_file).read_text()
+
+    for source, expect_caught in ((t.stage_path(0), True), (t.solution_path(), False)):
+        wd = tmp_path / f"w{source.stem}"
+        wd.mkdir()
+        (wd / t.target_file).write_text(source.read_text())
+        diff = "".join(difflib.unified_diff(
+            base.splitlines(keepends=True), source.read_text().splitlines(keepends=True),
+            fromfile=f"a/{t.target_file}", tofile=f"b/{t.target_file}"))
+        decision, reverted = enforce(pol, diff, {t.target_file: base}, wd)
+        assert bool(decision.violations) is expect_caught, source.stem
+        assert bool(reverted) is expect_caught
+        if expect_caught:
+            assert decision.violations[0].kind == "forbidden_content"
+            assert decision.blocked is False, "a revert must let the run continue"
+
+
+def test_running_the_govern_task_triggers_a_real_revert_and_converges():
+    """End to end through the product: policy on the ticket, comparison run, and
+    the unsteered modes get their violation reverted before converging."""
+    c = TestClient(server.app)
+    t = c.post("/api/tickets", json={"title": "gov demo"}).json()
+    pol = playground.story_for("secure_api_key")["policy"]
+    assert c.put(f"/api/tickets/{t['id']}/governance",
+                 json={"policy": pol}).status_code == 200
+    assert c.post(f"/api/tickets/{t['id']}/comparison",
+                  json={"task": "secure_api_key"}).status_code == 200
+
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        body = c.get(f"/api/tickets/{t['id']}/comparison").json()["comparison"]
+        if body and body["status"] in ("done", "error"):
+            break
+        time.sleep(0.25)
+    assert body["status"] == "done", body
+
+    caught = {}
+    for m in body["modes"]:
+        ev = c.get(f"/api/briefs/{m['result']['brief_id']}/events").json()["events"]
+        pols = [e for e in ev if e["type"] == "policy"]
+        assert pols, f"{m['mode']} never ran a policy check"
+        caught[m["mode"]] = (sum(len(e["payload"]["violations"]) for e in pols),
+                             [p for e in pols for p in (e["payload"].get("reverted") or [])])
+        assert m["result"]["effectiveness"] == 1.0, "it must still converge on the clean fix"
+        assert m["result"]["final_state"] == "done"
+
+    assert caught["hitl_no_comments"][0] >= 1, "the unsteered run should trip the gate"
+    assert "apiclient.py" in caught["hitl_no_comments"][1], "the change must be reverted"
+    assert caught["autonomous"][0] >= 1
+    assert caught["hitl_comments"][0] == 0, (
+        "the steered run knew the rule up front and should never have tripped it")
+
+
+def test_the_govern_task_keeps_the_honest_three_mode_pattern():
+    c = TestClient(server.app)
+    t = c.post("/api/tickets", json={"title": "gov pattern"}).json()
+    c.put(f"/api/tickets/{t['id']}/governance",
+          json={"policy": playground.story_for("secure_api_key")["policy"]})
+    c.post(f"/api/tickets/{t['id']}/comparison", json={"task": "secure_api_key"})
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        body = c.get(f"/api/tickets/{t['id']}/comparison").json()["comparison"]
+        if body and body["status"] in ("done", "error"):
+            break
+        time.sleep(0.25)
+    assert body["status"] == "done"
+    res = {m["mode"]: m["result"] for m in body["modes"]}
+    assert res["hitl_comments"]["iterations"] < res["hitl_no_comments"]["iterations"]
+    assert res["hitl_no_comments"]["iterations"] == res["autonomous"]["iterations"]
+    assert {r["effectiveness"] for r in res.values()} == {1.0}
+    assert body["deltas"]["unsteered_modes_equivalent"] is True

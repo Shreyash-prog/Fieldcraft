@@ -410,6 +410,52 @@ details.rn-adv[open] summary{color:var(--ink)}
 .ov-foot{margin:4px 0 0;font-size:12.5px;line-height:1.6;color:var(--faint);max-width:80ch}
 .ov-foot b{color:var(--mut)}
 
+/* ---------- your runs (history) ---------- */
+table.hist td{vertical-align:top}
+table.hist .sub2{display:block;font:10px var(--mono);color:var(--faint);margin-top:2px}
+/* the kind of run is the thing History could never say before */
+.kind{display:inline-block;font:600 9px var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  border-radius:20px;padding:2px 8px;border:1px solid var(--line-2);color:var(--mut)}
+.kind.k-ticket_single{color:var(--teal);border-color:var(--teal-line);background:var(--teal-dim)}
+.kind.k-comparison{color:var(--blue);border-color:rgba(106,165,255,.3);background:var(--blue-dim)}
+.gov-yes{font:11px var(--mono);color:var(--amber)}
+.hist-empty{padding:22px 4px;font-size:13.5px}
+.hist-empty p{margin:0 0 6px}
+
+/* ---------- what we can show (reports) ---------- */
+/* the distinction History-vs-Reports is the thing most likely to be misread, so
+   it is stated before the cards, not in a footnote */
+.rep-note{border-left:3px solid var(--blue);background:var(--blue-dim);border-radius:9px;
+  padding:12px 15px;margin-bottom:16px;font-size:13px;line-height:1.6;color:var(--mut)}
+.rep-note b{color:var(--ink)}
+.rep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;
+  margin-bottom:18px}
+.rep-card{display:flex;flex-direction:column;gap:7px;text-align:left;padding:17px 18px;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--glass);
+  color:var(--ink);cursor:pointer;font:inherit;
+  transition:transform var(--fast) var(--ease),border-color var(--fast) var(--ease),
+             background var(--fast) var(--ease)}
+.rep-card:hover{transform:translateY(-2px);background:var(--bg-3);border-color:var(--line-2)}
+.rep-card.measure:hover{border-color:var(--teal-line)}
+.rep-card.govern:hover{border-color:rgba(242,181,68,.4)}
+.rep-card .ov-tag{align-self:flex-start;margin-bottom:2px}
+.rep-card.measure .ov-tag{color:var(--teal);border:1px solid var(--teal-line)}
+.rep-card.govern .ov-tag{color:var(--amber);border:1px solid rgba(242,181,68,.35)}
+.rep-card b{font:600 14.5px/1.35 var(--sans)}
+.rep-card i{font-style:normal;font-size:12.5px;line-height:1.55;color:var(--mut)}
+
+/* ---------- the governance gate, made visible in Try it ---------- */
+.gate-box{margin-top:12px;border:1px solid rgba(242,181,68,.3);border-radius:11px;
+  padding:14px 15px;background:var(--amber-dim)}
+.gate-box .gh{font:600 12.5px var(--sans);color:var(--amber);margin-bottom:10px}
+.grows{display:flex;flex-direction:column;gap:7px}
+.grow{display:flex;gap:10px;align-items:baseline;padding:8px 10px;border-radius:8px;
+  background:var(--bg-3);font-size:12.5px}
+.grow .gm{flex:none;min-width:130px;font:600 11px var(--mono);color:var(--mut)}
+.grow.hit .gv{color:var(--amber)}
+.grow.ok .gv{color:var(--teal)}
+.gate-box .gnote{margin:11px 0 0;font-size:12.5px;line-height:1.6;color:var(--mut)}
+
 /* ---------- per-ticket governance ---------- */
 .gov-off{padding:9px 11px;border:1px dashed var(--line);border-radius:9px;
   font-size:12.5px;color:var(--faint);margin-bottom:13px}

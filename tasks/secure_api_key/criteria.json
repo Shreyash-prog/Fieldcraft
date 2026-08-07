@@ -1,0 +1,9 @@
+[
+ {"id":"AK1","text":"Uses the key it is given",
+  "probe":{"func":"build_headers","args":["abc123"],
+           "equals":{"Authorization":"Bearer abc123"}}},
+ {"id":"AK2","text":"Sets only the Authorization header",
+  "probe":{"func":"build_headers","args":["k"],"equals":{"Authorization":"Bearer k"}}},
+ {"id":"AK3","text":"Emits a Bearer token",
+  "probe":{"func":"build_headers","args":["xyz"],"contains":"Authorization"}}
+]
