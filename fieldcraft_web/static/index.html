@@ -634,6 +634,15 @@ function openTicket(id){
       <div class="ctx-block"><div class="h">▤ PDF context</div>
         <div id="pdfBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
 
+      <p class="fam" style="margin-top:24px">Governance</p>
+      <div class="ctx-block">
+        <div class="h">⚖︎ Policy for this ticket</div>
+        <p class="hint">The agent's changes are checked against this policy on every turn;
+           violations are reverted and logged. It applies automatically to this ticket's runs —
+           you don't set it per run.</p>
+        <div id="govBody"><div class="spin"><span class="s"></span>loading…</div></div>
+      </div>
+
       <p class="fam" style="margin-top:24px">Run</p>
       <div class="ctx-block">
         <div class="h">▶ Run once</div>
@@ -645,6 +654,7 @@ function openTicket(id){
           <button data-r="auto">Autonomous</button>
         </div>
         <p class="rn-note" id="rnReviewNote"></p>
+        <div class="rn-gov" id="rnGov"></div>
         <details class="pol rn-adv"><summary>Advanced</summary>
           <div class="grid">
             <div><label>Agent</label><select id="rnAdapter">
@@ -690,7 +700,82 @@ function openTicket(id){
     await moveTicket(t.id,b.dataset.s);
     el('dwSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
   wireTicketRun(t);
-  loadRepo(t.id); loadPdfs(t.id); loadComparison(t.id);
+  loadRepo(t.id); loadPdfs(t.id); loadGovernance(t.id); loadComparison(t.id);
+}
+
+// ---------- per-ticket governance (B3) ----------
+// Stores the operator's intent (globs + three flags); the server compiles it to
+// the policy engine.advance already enforces. Runs pick it up automatically.
+const GOV_FLAGS=[
+  ['secrets','hardcoded secrets','API keys, tokens and passwords committed in the diff'],
+  ['eval','eval / exec','dynamically executed code'],
+  ['network','network calls','requests, urllib and raw sockets']];
+let GOV_STATE=null;
+
+async function loadGovernance(tid){
+  if(!el('govBody')) return;
+  const r=await fetch(`/api/tickets/${tid}/governance`);
+  if(!r.ok) return;
+  const d=await r.json();
+  if(!el('govBody')) return;
+  GOV_STATE=d.governance_policy;
+  renderGovernance(tid, d.governance_policy);
+  reflectGovernanceOnRun();
+}
+function renderGovernance(tid, pol){
+  const body=el('govBody'); if(!body) return;
+  const paths=(pol&&pol.protected_paths||[]).join(', ');
+  const forbid=(pol&&pol.forbid)||{};
+  body.innerHTML=`
+    ${pol ? `<div class="gov-on"><span class="k">governed</span>${esc(govSummary(pol))}</div>`
+          : `<div class="gov-off">No policy — this ticket's runs are <b>ungoverned</b>.</div>`}
+    <label for="govPaths">Protected paths <span class="muted">(comma-separated globs the agent may not edit)</span></label>
+    <input id="govPaths" placeholder="tests/, *.env" value="${esc(paths)}">
+    <label class="rn-lbl" style="margin-top:14px">Forbid in added code</label>
+    <div class="gov-flags">${GOV_FLAGS.map(([k,label,hint])=>`
+      <label class="gov-flag"><input type="checkbox" id="gov_${k}"${forbid[k]?' checked':''}>
+        <span><b>${esc(label)}</b><i>${esc(hint)}</i></span></label>`).join('')}</div>
+    <div class="ctx-row" style="margin-top:14px">
+      <button class="act go" id="govSave">Save policy</button>
+      ${pol?`<button class="act ghost" id="govClear">Remove policy</button>`:''}
+    </div>
+    <p id="govMsg" style="font-size:12.5px;min-height:16px;margin:9px 0 0"></p>`;
+  el('govSave').onclick=()=>saveGovernance(tid);
+  if(el('govClear')) el('govClear').onclick=()=>saveGovernance(tid, true);
+}
+function govSummary(pol){
+  const bits=[];
+  if(pol.protected_paths&&pol.protected_paths.length)
+    bits.push(`${pol.protected_paths.length} protected path${pol.protected_paths.length===1?'':'s'}`);
+  const on=GOV_FLAGS.filter(([k])=>pol.forbid&&pol.forbid[k]).map(([,l])=>l);
+  if(on.length) bits.push('forbids '+on.join(', '));
+  return bits.join(' · ')||'no rules';
+}
+async function saveGovernance(tid, clear){
+  const msg=el('govMsg'), btn=el('govSave');
+  btn.disabled=true; msg.style.color='var(--mut)'; msg.textContent='saving…';
+  const policy = clear ? null : {
+    protected_paths: (el('govPaths').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+    forbid: Object.fromEntries(GOV_FLAGS.map(([k])=>[k, el('gov_'+k).checked]))};
+  const r=await fetch(`/api/tickets/${tid}/governance`,{method:'PUT',
+    headers:{'content-type':'application/json'},body:JSON.stringify({policy})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){ btn.disabled=false; msg.style.color='var(--red)';
+    msg.textContent='✗ '+(d.detail||'could not save'); return; }
+  GOV_STATE=d.governance_policy;
+  renderGovernance(tid, d.governance_policy);
+  reflectGovernanceOnRun();
+  el('govMsg').style.color='var(--teal)';
+  el('govMsg').textContent = d.governance_policy ? '✓ saved — this ticket’s runs are governed'
+                                                 : '✓ policy removed';
+}
+// The Run section says out loud whether the next run will be governed.
+function reflectGovernanceOnRun(){
+  const n=el('rnGov'); if(!n) return;
+  n.className = GOV_STATE ? 'rn-gov on' : 'rn-gov';
+  n.innerHTML = GOV_STATE
+    ? `⚖︎ Governed by this ticket's policy — ${esc(govSummary(GOV_STATE))}.`
+    : `⚖︎ Ungoverned — no policy set for this ticket.`;
 }
 
 // ---------- single governed run, in the drawer (B2) ----------

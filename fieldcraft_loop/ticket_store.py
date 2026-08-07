@@ -36,12 +36,17 @@ RUN_MODES = ("hitl_no_comments", "hitl_comments", "autonomous")
 TITLE_MAX = 200
 DESCRIPTION_MAX = 8000
 
-_JSON_COLS = {"pdf_context_ids", "runs"}
+_JSON_COLS = {"pdf_context_ids", "runs", "governance_policy"}
+# JSON columns whose empty value is None rather than []: a ticket with no
+# governance policy is *ungoverned*, which is a different statement from "an
+# empty list of rules".
+_JSON_NULLABLE = {"governance_policy"}
 _COLS = ("id", "user_id", "title", "description", "status", "created_at", "updated_at",
-         "repo_url", "repo_task_handle", "pdf_context_ids", "runs")
+         "repo_url", "repo_task_handle", "pdf_context_ids", "runs", "governance_policy")
 # Columns a later phase may add to an existing database, applied in place.
 _ADDABLE = {"repo_url": "TEXT", "repo_task_handle": "TEXT",
-            "pdf_context_ids": "TEXT", "runs": "TEXT"}
+            "pdf_context_ids": "TEXT", "runs": "TEXT",
+            "governance_policy": "TEXT"}
 
 
 def clamp(text: str | None, limit: int) -> str:
@@ -101,9 +106,14 @@ class TicketStore:
             if fields["status"] not in STATUSES:
                 raise ValueError(f"status must be one of {', '.join(STATUSES)}")
             clean["status"] = fields["status"]
-        for k in ("repo_url", "repo_task_handle", "pdf_context_ids", "runs"):
+        for k in ("repo_url", "repo_task_handle", "pdf_context_ids", "runs",
+                  "governance_policy"):
             if k in fields:
-                clean[k] = json.dumps(fields[k]) if k in _JSON_COLS else fields[k]
+                v = fields[k]
+                if k in _JSON_NULLABLE and v is None:
+                    clean[k] = None                  # clearing the policy
+                else:
+                    clean[k] = json.dumps(v) if k in _JSON_COLS else v
         if clean:
             cols = ",".join(f"{k}=?" for k in clean) + ",updated_at=?"
             with self._lock:
@@ -153,8 +163,9 @@ class TicketStore:
     def _row(r) -> dict:
         t = dict(zip(_COLS, r))
         for col in _JSON_COLS:
+            empty = None if col in _JSON_NULLABLE else []
             try:
-                t[col] = json.loads(t[col]) if t[col] else []
+                t[col] = json.loads(t[col]) if t[col] else empty
             except (TypeError, ValueError):
-                t[col] = []
+                t[col] = empty
         return t

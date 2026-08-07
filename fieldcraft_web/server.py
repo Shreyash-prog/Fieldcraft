@@ -35,7 +35,7 @@ from fieldcraft_loop.engine import Engine, TERMINAL
 from fieldcraft_loop.pdf_context import PdfContextError, PdfStore
 from fieldcraft_loop.ticket_store import STATUSES, TicketStore
 from . import auth as auth_mod
-from . import invite_store
+from . import governance, invite_store
 from .config import settings
 from .invite_store import InviteStore
 from .ledger import Ledger
@@ -533,6 +533,52 @@ def patch_ticket(tid: str, req: PatchTicket, user: str = Depends(require_session
     return tickets.update(tid, user, **req.model_dump(exclude_unset=True))
 
 
+# --- per-ticket governance (B3) ---------------------------------------------
+# A ticket carries its own policy, so governance attaches to real work instead of
+# being re-typed into a form per run. The stored shape is the operator's intent
+# (globs + three flags); `governance.compile_policy` turns it into the dict the
+# engine already enforces. No second enforcement path — see governance.py.
+
+class GovernanceReq(BaseModel):
+    # Deliberately untyped: `governance.validate` owns every shape rule, so a
+    # malformed policy always comes back as one 400 with a readable message
+    # rather than a 400 for some shapes and pydantic's 422 for others.
+    policy: object = None                 # null clears it: the ticket becomes ungoverned
+
+
+def _is_intent(policy) -> bool:
+    """Whether a policy is the stored *intent* shape (needs compiling) rather
+    than an already-compiled enforcement policy.
+
+    `forbid` is the discriminator: B1 callers may still hand in a ready-made
+    {protected_paths, editable_paths, forbidden_patterns} dict, and that must
+    keep working untouched.
+    """
+    return isinstance(policy, dict) and "forbid" in policy
+
+
+@app.put("/api/tickets/{tid}/governance")
+def set_ticket_governance(tid: str, req: GovernanceReq,
+                          user: str = Depends(require_session)):
+    _owned_ticket(tid, user)
+    try:
+        stored = governance.validate(req.policy)
+    except governance.PolicyError as e:
+        raise HTTPException(400, str(e))
+    t = tickets.update(tid, user, governance_policy=stored)
+    return {"ok": True, "governance_policy": stored,
+            "summary": governance.describe(stored),
+            "ticket": t["id"] if t else tid}
+
+
+@app.get("/api/tickets/{tid}/governance")
+def get_ticket_governance(tid: str, user: str = Depends(require_session)):
+    t = _owned_ticket(tid, user)
+    stored = t.get("governance_policy")
+    return {"governance_policy": stored, "summary": governance.describe(stored),
+            "forbid_flags": list(governance.FORBID_KEYS)}
+
+
 @app.delete("/api/tickets/{tid}")
 def delete_ticket(tid: str, user: str = Depends(require_session)):
     _owned_ticket(tid, user)
@@ -758,10 +804,19 @@ def start_ticket_run(tid: str, req: TicketRun, request: Request,
             raise HTTPException(409, "this ticket's connected repository is no longer "
                                      "available on this instance — reconnect it")
 
+    # Precedence: the ticket's stored policy is the default, and an explicit
+    # `policy` on the request overrides it — including an explicit null, which
+    # runs this one ungoverned. "Explicit" means the field was actually sent, not
+    # that it happens to be None, so omitting it never silently drops governance.
+    if "policy" in req.model_fields_set:
+        policy = governance.compile_policy(req.policy) if _is_intent(req.policy) else req.policy
+    else:
+        policy = governance.compile_policy(ticket.get("governance_policy"))
+
     started = start_governed_run(
         user=user, ip=client_ip(request), task=task, adapter=req.adapter,
         grader=req.grader, review=req.review, max_iterations=req.max_iterations,
-        budget=req.budget, policy=req.policy,
+        budget=req.budget, policy=policy,
         goal=f"[{tid}] {ticket.get('title', '')}".strip(),
         # Tagged in the run's config, which is what runs.db stores — so History
         # can tell a ticket run from a Run-a-task run without a schema change.

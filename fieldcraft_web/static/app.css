@@ -375,6 +375,27 @@ details.rn-adv{margin-top:14px}
 details.rn-adv summary{font:500 12.5px var(--sans);color:var(--mut)}
 details.rn-adv[open] summary{color:var(--ink)}
 
+/* ---------- per-ticket governance ---------- */
+.gov-off{padding:9px 11px;border:1px dashed var(--line);border-radius:9px;
+  font-size:12.5px;color:var(--faint);margin-bottom:13px}
+.gov-on{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:9px;
+  background:var(--amber-dim);border-left:3px solid var(--amber);
+  font-size:12.5px;color:var(--ink);margin-bottom:13px}
+.gov-on .k{font:600 9px var(--mono);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--amber);flex:none}
+.gov-flags{display:flex;flex-direction:column;gap:8px}
+.gov-flag{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);
+  border-radius:9px;background:var(--bg-3);cursor:pointer;
+  transition:border-color var(--fast) var(--ease)}
+.gov-flag:hover{border-color:var(--line-2)}
+.gov-flag input{width:auto;margin-top:2px;accent-color:var(--amber);flex:none}
+.gov-flag span{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--ink)}
+.gov-flag i{font-style:normal;font-size:12px;color:var(--faint)}
+/* the Run section restates the governance state, so it is visible at the moment
+   you press the button rather than only in the section that sets it */
+.rn-gov{margin-top:10px;font:12px/1.5 var(--mono);color:var(--faint)}
+.rn-gov.on{color:var(--amber)}
+
 /* ---------- "Try it" playground ---------- */
 .try-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
 .try-card{position:relative;display:flex;flex-direction:column;gap:7px;text-align:left;
