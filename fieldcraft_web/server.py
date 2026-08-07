@@ -363,36 +363,55 @@ def end_session(response: Response):
     return {"ok": True}
 
 
-@app.post("/api/briefs")
-def create_brief(req: CreateBrief, request: Request, user: str = Depends(require_session)):
+# --- the one way a governed run is started -----------------------------------
+# Both entry points (POST /api/briefs and POST /api/tickets/{id}/runs) go through
+# `start_governed_run`. It is a single function on purpose: the mock-only guard,
+# the live gate, the iteration/budget clamps and the ledger reservation are spend
+# and safety controls, and two copies of them WILL drift. Nothing else in the app
+# may call engine.create for a user-initiated run.
+
+
+def start_governed_run(*, user: str, ip: str, task: str, adapter: str, grader: str,
+                       review: str, max_iterations: int, budget: float,
+                       policy: dict | None = None, goal: str | None = None,
+                       extra_cfg: dict | None = None) -> dict:
+    """Clamp, guard, reserve, create and drive one governed run.
+
+    Returns {"brief_id", "config", "connected", "live"}. Raises HTTPException for
+    every refusal (403 mock-only / live-disabled, 429 caps, 503 concurrency) so
+    both callers refuse identically.
+    """
     mine = CONNECTED.get(user, {})
-    connected = req.task in mine
-    if connected and (req.adapter != "mock" or req.grader == "tooluse"):
+    connected = task in mine
+    if connected and (adapter != "mock" or grader == "tooluse"):
         raise HTTPException(403, "connected repos run with the offline mock agent only "
                                  "(adapter='mock', grader='behavioral')")
-    live = req.adapter == "claude" or req.grader == "tooluse"
+    live = adapter == "claude" or grader == "tooluse"
     if live and not settings.allow_live:
         raise HTTPException(403, "live mode is disabled on this deployment")
 
-    req.max_iterations = max(1, min(req.max_iterations, settings.max_iterations_cap))
-    req.budget = max(0.1, min(req.budget, settings.max_budget_per_run_usd))
+    max_iterations = max(1, min(max_iterations, settings.max_iterations_cap))
+    budget = max(0.1, min(budget, settings.max_budget_per_run_usd))
 
     # One transaction decides the rate limit and both spend caps, and holds the
     # money until the run settles. Offline runs reserve too (so the path is always
     # exercised and their simulated cost is still accounted) but the money caps
     # only *block* a run that can really spend — which is what they did before.
-    res = ledger.reserve(user, client_ip(request), req.budget, enforce_cost=live)
+    res = ledger.reserve(user, ip, budget, enforce_cost=live)
     if not res.ok:
         raise HTTPException(429, res.message)
     if not conc.acquire():
         ledger.release(res.id)
         raise HTTPException(503, "too many concurrent runs; try again shortly")
 
-    goal = ("Make the connected repository's test suite pass" if connected else
-            "Implement redact_pii so all tests and acceptance criteria pass")
-    cfg = {**req.model_dump(), "goal": goal, "reservation_id": res.id}
-    task_dir = str(mine[req.task] if connected
-                   else TASKS.get(req.task, (Path(TASK_DIR), "single"))[0])
+    if goal is None:
+        goal = ("Make the connected repository's test suite pass" if connected else
+                "Implement redact_pii so all tests and acceptance criteria pass")
+    cfg = {"task": task, "adapter": adapter, "grader": grader, "review": review,
+           "max_iterations": max_iterations, "budget": budget, "policy": policy,
+           "goal": goal, "reservation_id": res.id, **(extra_cfg or {})}
+    task_dir = str(mine[task] if connected
+                   else TASKS.get(task, (Path(TASK_DIR), "single"))[0])
     try:
         bid = engine.create(cfg, task_dir, user)
     except Exception:                      # nothing started: give the money back
@@ -400,7 +419,20 @@ def create_brief(req: CreateBrief, request: Request, user: str = Depends(require
         ledger.release(res.id)
         raise
     _drive(bid, gated=True)
-    return {"brief_id": bid, "config": req.model_dump()}
+    return {"brief_id": bid, "config": cfg, "connected": connected, "live": live,
+            "max_iterations": max_iterations, "budget": budget}
+
+
+@app.post("/api/briefs")
+def create_brief(req: CreateBrief, request: Request, user: str = Depends(require_session)):
+    started = start_governed_run(
+        user=user, ip=client_ip(request), task=req.task, adapter=req.adapter,
+        grader=req.grader, review=req.review, max_iterations=req.max_iterations,
+        budget=req.budget, policy=req.policy)
+    # The response has always echoed the *clamped* request, so keep doing that.
+    req.max_iterations = started["max_iterations"]
+    req.budget = started["budget"]
+    return {"brief_id": started["brief_id"], "config": req.model_dump()}
 
 
 @app.get("/api/briefs/{brief_id}")
@@ -664,6 +696,103 @@ def delete_ticket_pdf(tid: str, pdf_id: str, user: str = Depends(require_session
     if not pdfs.delete(user, tid, pdf_id):
         raise HTTPException(404, "unknown document")
     return {"ok": True, "pdfs": _sync_pdf_ids(tid, user)}
+
+
+# --- ticket-scoped single governed run (B1) ---------------------------------
+# One governed develop→verify→iterate run owned by a ticket, distinct from the
+# three-mode comparison. It creates an ordinary brief through
+# `start_governed_run`, so it is streamed by GET /api/briefs/{bid}/stream and
+# reviewed by POST /api/briefs/{bid}/review with no new machinery — and it is
+# clamped and reserved by exactly the same code as POST /api/briefs.
+
+TICKET_RUN_KIND = "ticket_single"
+
+
+class TicketRun(BaseModel):
+    task: str | None = None                 # default: the ticket's repo, else redact_pii
+    review: str = "human"
+    adapter: str = "mock"                   # advanced overrides, same defaults as a brief
+    grader: str = "behavioral"
+    max_iterations: int = 5
+    budget: float = 2.0
+    policy: dict | None = None              # per-run governance (B3 will store it on the ticket)
+
+
+def _rehydrate_ticket_repo(tid: str, user: str, handle: str) -> bool:
+    """Re-register a ticket's connected repo in CONNECTED after a restart.
+
+    CONNECTED is in-memory, but the clone and its task.json are on disk from A2.
+    Without this a ticket whose repo survived a restart would silently fall
+    through to the default bundled task — running the wrong thing rather than
+    saying so.
+    """
+    facts = _repo_facts(tid, user)
+    tdir = _ticket_repo_dir(tid, user)
+    if not facts or facts.get("handle") != handle or not (tdir / "task.json").is_file():
+        return False
+    CONNECTED.setdefault(user, {})[handle] = tdir
+    return True
+
+
+@app.post("/api/tickets/{tid}/runs")
+def start_ticket_run(tid: str, req: TicketRun, request: Request,
+                     user: str = Depends(require_session)):
+    """Start one governed run for this ticket."""
+    ticket = _owned_ticket(tid, user)
+    handle = ticket.get("repo_task_handle") or ""
+    task = req.task or handle or "redact_pii"
+
+    # A ticket pointed at a connected repo must run that repo or fail loudly.
+    if task == handle and handle:
+        if handle not in CONNECTED.get(user, {}) and not _rehydrate_ticket_repo(tid, user, handle):
+            raise HTTPException(409, "this ticket's connected repository is no longer "
+                                     "available on this instance — reconnect it")
+
+    started = start_governed_run(
+        user=user, ip=client_ip(request), task=task, adapter=req.adapter,
+        grader=req.grader, review=req.review, max_iterations=req.max_iterations,
+        budget=req.budget, policy=req.policy,
+        goal=f"[{tid}] {ticket.get('title', '')}".strip(),
+        # Tagged in the run's config, which is what runs.db stores — so History
+        # can tell a ticket run from a Run-a-task run without a schema change.
+        extra_cfg={"ticket_id": tid, "run_kind": TICKET_RUN_KIND})
+
+    _attach_ticket_run(tid, user, started["brief_id"], task, started["connected"])
+    return {"brief_id": started["brief_id"], "ticket": tid, "task": task,
+            "kind": TICKET_RUN_KIND, "connected_repo": started["connected"],
+            "review": req.review,
+            "stream": f"/api/briefs/{started['brief_id']}/stream",
+            "review_url": f"/api/briefs/{started['brief_id']}/review"}
+
+
+def _attach_ticket_run(tid: str, user: str, bid: str, task: str, connected: bool) -> None:
+    """Record the run on the ticket, alongside any comparison runs.
+
+    Deliberately carries no `mode` key: the comparison's replace-by-mode logic
+    keys off that, so single runs accumulate rather than evicting each other or
+    being evicted.
+    """
+    t = tickets.get(tid, user)
+    if not t:
+        return
+    runs = list(t.get("runs") or [])
+    runs.append({"brief_id": bid, "kind": TICKET_RUN_KIND, "task": task,
+                 "connected_repo": connected, "at": time.time()})
+    tickets.update(tid, user, runs=runs)
+
+
+@app.get("/api/tickets/{tid}/runs")
+def list_ticket_runs(tid: str, user: str = Depends(require_session)):
+    """The runs attached to this ticket, newest first, with live status."""
+    t = _owned_ticket(tid, user)
+    out = []
+    for entry in (t.get("runs") or []):
+        r = engine.get(entry["brief_id"], user)
+        out.append({**entry, "status": r["status"] if r else "unknown",
+                    "iteration": r["iteration"] if r else 0,
+                    "cost": round(r["total_cost"], 4) if r else 0.0})
+    out.sort(key=lambda e: e.get("at", 0), reverse=True)
+    return {"runs": out}
 
 
 # --- ticket context: the three-mode comparison (A3) -------------------------
@@ -992,7 +1121,12 @@ def list_briefs(user: str = Depends(require_session)):
         out.append({"brief_id": r["brief_id"], "status": r["status"],
                     "iteration": r["iteration"], "cost": round(r["total_cost"], 4),
                     "adapter": cfg.get("adapter", ""), "policy": bool(cfg.get("policy")),
-                    "task": Path(td).name if td else "", "created": r["created"]})
+                    "task": Path(td).name if td else "", "created": r["created"],
+                    # How this run was started, so History can tell a ticket run
+                    # from a Run-a-task run from a comparison leg.
+                    "run_kind": cfg.get("run_kind", "brief"),
+                    "ticket_id": cfg.get("ticket_id"),
+                    "comparison_mode": cfg.get("comparison_mode")})
     return {"briefs": out}
 
 
