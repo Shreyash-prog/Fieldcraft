@@ -19,6 +19,7 @@ from fieldcraft_loop.task import Task
 from fieldcraft_loop.ticket_store import TicketStore
 from fieldcraft_web import server
 from fieldcraft_web.auth import COOKIE, Auth
+from tests.conftest import ROOT
 
 CODES = "alpha-code,beta-code"
 # The four "measure" tasks: their trap is a *correctness* bug, so the turn-1
@@ -356,3 +357,119 @@ def test_the_govern_task_keeps_the_honest_three_mode_pattern():
     assert res["hitl_no_comments"]["iterations"] == res["autonomous"]["iterations"]
     assert {r["effectiveness"] for r in res.values()} == {1.0}
     assert body["deltas"]["unsteered_modes_equivalent"] is True
+
+
+# =============================================================================
+# Regression: a Try-it task must not depend on a Board ticket surviving
+# =============================================================================
+# Deleting Board tickets is ordinary user behaviour. The playground used to cache
+# the ticket id it created and reuse it unchecked, so deleting that ticket left a
+# dangling reference and the next run failed with "unknown ticket".
+
+def _playground_ticket(c, task_id):
+    """What the UI's find-or-create does, server-side."""
+    title = f"Try it · {playground.story_for(task_id)['title']}"
+    existing = [t for t in c.get("/api/tickets").json()["tickets"] if t["title"] == title]
+    if existing:
+        return existing[0]["id"]
+    return c.post("/api/tickets", json={"title": title, "status": "done"}).json()["id"]
+
+
+def _run_and_wait(c, tid, task_id, timeout_s=300):
+    r = c.post(f"/api/tickets/{tid}/comparison", json={"task": task_id})
+    if r.status_code != 200:
+        return r.status_code, None
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        body = c.get(f"/api/tickets/{tid}/comparison").json()["comparison"]
+        if body and body["status"] in ("done", "error"):
+            return 200, body
+        time.sleep(0.25)
+    raise AssertionError("comparison did not finish")
+
+
+def test_a_try_it_task_runs_with_no_prior_ticket():
+    c = TestClient(server.app)
+    assert c.get("/api/tickets").json()["tickets"] == []
+    tid = _playground_ticket(c, "parse_bool")
+    status, body = _run_and_wait(c, tid, "parse_bool")
+    assert status == 200 and body["status"] == "done"
+
+
+def test_a_deleted_ticket_makes_the_comparison_404():
+    """The mechanism behind the bug, pinned so the fix has something to fix."""
+    c = TestClient(server.app)
+    tid = _playground_ticket(c, "parse_bool")
+    assert c.delete(f"/api/tickets/{tid}").status_code == 200
+    r = c.post(f"/api/tickets/{tid}/comparison", json={"task": "parse_bool"})
+    assert r.status_code == 404 and r.json()["detail"] == "unknown ticket"
+
+
+def test_a_try_it_task_runs_again_after_its_ticket_was_deleted():
+    """The fix, end to end: run, delete the ticket the run created, run again —
+    the second run must succeed against a freshly resolved ticket."""
+    c = TestClient(server.app)
+    first = _playground_ticket(c, "parse_bool")
+    status, body = _run_and_wait(c, first, "parse_bool")
+    assert status == 200 and body["status"] == "done"
+
+    assert c.delete(f"/api/tickets/{first}").status_code == 200
+    assert c.get(f"/api/tickets/{first}").status_code == 404
+
+    # what the UI now does: the cached id no longer resolves, so re-resolve
+    second = _playground_ticket(c, "parse_bool")
+    assert second != first, "a fresh ticket should have been created"
+    status, body = _run_and_wait(c, second, "parse_bool")
+    assert status == 200 and body["status"] == "done"
+    assert body["deltas"]["unsteered_modes_equivalent"] is True
+
+
+def test_the_govern_task_is_still_governed_on_a_recreated_ticket():
+    """The policy must land on whichever ticket we ended up with — a recreated
+    ticket running ungoverned would silently break the demo."""
+    c = TestClient(server.app)
+    pol = playground.story_for("secure_api_key")["policy"]
+    first = _playground_ticket(c, "secure_api_key")
+    c.put(f"/api/tickets/{first}/governance", json={"policy": pol})
+    c.delete(f"/api/tickets/{first}")
+
+    second = _playground_ticket(c, "secure_api_key")
+    assert second != first
+    assert c.get(f"/api/tickets/{second}").json()["governance_policy"] is None, (
+        "a fresh ticket starts ungoverned — the playground must re-apply the policy")
+    c.put(f"/api/tickets/{second}/governance", json={"policy": pol})
+
+    status, body = _run_and_wait(c, second, "secure_api_key")
+    assert status == 200 and body["status"] == "done"
+    caught = 0
+    for m in body["modes"]:
+        ev = c.get(f"/api/briefs/{m['result']['brief_id']}/events").json()["events"]
+        caught += sum(len(e["payload"]["violations"])
+                      for e in ev if e["type"] == "policy")
+    assert caught >= 2, "the gate should still catch the unsteered runs"
+
+
+def test_the_playground_verifies_its_cached_ticket_before_using_it():
+    """Structural: the cache must be checked, not trusted."""
+    idx = (ROOT / "fieldcraft_web" / "static" / "index.html").read_text()
+    fn = idx[idx.index("async function tryTicketFor(id, forceNew)"):][:900]
+    assert "await fetch(`/api/tickets/${TRY_TICKET[id]}`)" in fn, (
+        "the cached ticket must be verified before it is reused")
+    assert "delete TRY_TICKET[id]" in fn, "a dead cache entry must be dropped"
+
+
+def test_the_playground_retries_once_on_a_404():
+    idx = (ROOT / "fieldcraft_web" / "static" / "index.html").read_text()
+    fn = idx[idx.index("async function runTry(id)"):][:1200]
+    assert "for(const forceNew of [false, true])" in fn
+    assert "if(r.status!==404) break;" in fn
+
+
+def test_a_refused_comparison_is_shown_not_left_spinning():
+    """A rate-limited or capped run used to leave Try it displaying 'Running
+    three ways' indefinitely — indistinguishable from one still working."""
+    idx = (ROOT / "fieldcraft_web" / "static" / "index.html").read_text()
+    fn = idx[idx.index("function renderTryComparison(id, c)"):][:1400]
+    assert "c.status==='error'" in fn, "the error state must be rendered"
+    assert "Couldn't finish this run" in fn
+    assert "Try again" in fn

@@ -315,37 +315,60 @@ function renderTryTask(id, comparison){
 }
 
 // Find-or-create this user's ticket for the task, then drive the real A3 endpoints.
-async function tryTicketFor(id){
-  if(TRY_TICKET[id]) return TRY_TICKET[id];
+// Resolve a ticket to run this task against.
+//
+// Deleting Board tickets is ordinary user behaviour, so a curated task must
+// never depend on one surviving. The cached id is *verified* before it is used
+// and the cache is dropped if the ticket is gone — find-or-create that actually
+// tolerates the find target having been deleted. `forceNew` skips both lookups,
+// for the retry in runTry().
+async function tryTicketFor(id, forceNew){
   const t=tryTask(id), title=`Try it · ${t.title}`;
-  const all=(await (await fetch('/api/tickets')).json()).tickets||[];
-  let tk=all.find(x=>x.title===title);
-  if(!tk){
-    tk=await (await fetch('/api/tickets',{method:'POST',
-      headers:{'content-type':'application/json'},
-      body:JSON.stringify({title, status:'done',
-        description:`Playground run of the bundled scripted task "${id}". `+
-                    `The catch: ${t.catch}`})})).json();
+  if(!forceNew && TRY_TICKET[id]){
+    if((await fetch(`/api/tickets/${TRY_TICKET[id]}`)).ok) return TRY_TICKET[id];
+    delete TRY_TICKET[id];                     // deleted from the Board since
   }
-  TRY_TICKET[id]=tk.id;
-  return tk.id;
+  if(!forceNew){
+    const all=(await (await fetch('/api/tickets')).json()).tickets||[];
+    const found=all.find(x=>x.title===title);
+    if(found){ TRY_TICKET[id]=found.id; return found.id; }
+  }
+  const made=await (await fetch('/api/tickets',{method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({title, status:'done',
+      description:`Playground run of the bundled scripted task "${id}". `+
+                  `The catch: ${t.catch}`})})).json();
+  TRY_TICKET[id]=made.id;
+  return made.id;
 }
-async function runTry(id){
-  const btn=el('tryRun'), msg=el('tryMsg');
-  btn.disabled=true; btn.textContent='Starting…'; msg.textContent='';
-  let tid;
-  try{ tid=await tryTicketFor(id); }
-  catch(e){ btn.disabled=false; btn.textContent='Run all three modes';
-    msg.style.color='var(--red)'; msg.textContent='could not start: '+e; return; }
-  // A govern task carries its own policy. Put it on the ticket first, so the
-  // enforcement that runs is the real per-ticket governance — not a special case.
+
+// Ticket + its policy, ready to run. A govern task's policy goes on whichever
+// ticket we ended up with, so a recreated ticket is governed just the same.
+async function tryPrepare(id, forceNew){
+  const tid=await tryTicketFor(id, forceNew);
   const task=tryTask(id);
   if(task && task.policy){
     await fetch(`/api/tickets/${tid}/governance`,{method:'PUT',
       headers:{'content-type':'application/json'},body:JSON.stringify({policy:task.policy})});
   }
-  const r=await fetch(`/api/tickets/${tid}/comparison`,{method:'POST',
-    headers:{'content-type':'application/json'},body:JSON.stringify({task:id})});
+  return tid;
+}
+async function runTry(id){
+  const btn=el('tryRun'), msg=el('tryMsg');
+  btn.disabled=true; btn.textContent='Starting…'; msg.textContent='';
+  let tid, r;
+  // Two attempts: the second forces a brand-new ticket. That covers the ticket
+  // being deleted between resolving it and starting the run (another tab), so a
+  // 404 here is recovered from rather than shown to the user.
+  for(const forceNew of [false, true]){
+    try{ tid=await tryPrepare(id, forceNew); }
+    catch(e){ btn.disabled=false; btn.textContent='Run all three modes';
+      msg.style.color='var(--red)'; msg.textContent='could not start: '+e; return; }
+    r=await fetch(`/api/tickets/${tid}/comparison`,{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify({task:id})});
+    if(r.status!==404) break;
+    delete TRY_TICKET[id];
+  }
   if(!r.ok){ const d=await r.json().catch(()=>({}));
     btn.disabled=false; btn.textContent='Run all three modes';
     msg.style.color='var(--red)'; msg.textContent=d.detail||'could not start the comparison'; return; }
@@ -369,6 +392,17 @@ function renderTryComparison(id, c){
   if(c.status==='running'){
     host.innerHTML=`<div class="card"><p class="fam">Running three ways</p>
       <div class="cmp-run">${c.modes.map(cmpRow).join('')}</div>${SCRIPTED_NOTE}</div>`;
+    return;
+  }
+  if(c.status==='error'){
+    // Without this the view sat on "Running three ways" forever — a refused run
+    // (rate limit, spend cap) looked identical to one still working.
+    host.innerHTML=`<div class="card"><p class="fam">Couldn't finish this run</p>
+      <div class="cmp-run">${c.modes.map(cmpRow).join('')}</div>
+      <p class="ctx-err">✗ ${esc(c.error||'the comparison failed')}</p>
+      <div class="ctx-row" style="margin-top:12px">
+        <button class="act ghost" onclick="runTry('${esc(id)}')">Try again</button></div>
+      ${SCRIPTED_NOTE}</div>`;
     return;
   }
   if(c.status!=='done') return;
