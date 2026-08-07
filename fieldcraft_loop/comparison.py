@@ -123,14 +123,23 @@ def _simulate_reviews(engine, bid: str, mode: Mode, comment: str) -> dict:
 
 
 def run_mode(engine, mode: Mode, task_dir: str | Path, task_name: str,
-             user_id: str, *, max_iterations: int = 5, budget: float = 2.0,
-             extra_config: dict | None = None) -> dict:
-    """Run one mode end to end and return its measured result."""
-    cfg = {"task": task_name, "adapter": mode.adapter, "grader": "behavioral",
-           "review": mode.review, "max_iterations": max_iterations, "budget": budget,
-           "goal": f"[{mode.key}] {task_name} — scripted three-mode comparison",
-           "comparison_mode": mode.key, **(extra_config or {})}
-    bid = engine.create(cfg, str(task_dir), user_id)
+             user_id: str, *, create_run, max_iterations: int = 5,
+             budget: float = 2.0, extra_config: dict | None = None) -> dict:
+    """Run one mode end to end and return its measured result.
+
+    `create_run` is REQUIRED and is the only way a run comes into being here.
+    This module deliberately does not call `engine.create` itself: a comparison
+    mode is a user-triggerable run, so it has to be clamped and reserved against
+    the spend ledger like any other, and the ledger lives in the web layer. The
+    caller injects a creator that does that (`server.start_governed_run`), which
+    is what keeps the comparison from being the one path that can outspend a cap.
+
+    Signature: create_run(mode=..., task_name=..., user_id=...,
+                          max_iterations=..., budget=..., extra_config=...) -> brief_id
+    """
+    bid = create_run(mode=mode, task_name=task_name, user_id=user_id,
+                     max_iterations=max_iterations, budget=budget,
+                     extra_config=extra_config)
 
     comment = ""
     if mode.steered:
@@ -179,14 +188,18 @@ def measure(engine, r: dict, mode: Mode) -> dict:
 
 
 def run_comparison(engine, task_dir: str | Path, task_name: str, user_id: str,
-                   on_progress=None, **kw) -> list[dict]:
+                   on_progress=None, *, create_run, **kw) -> list[dict]:
     """Run all three modes **sequentially** and return their results in order.
 
     `on_progress(mode_key, status, result)` is called as each mode starts and
     finishes so a caller can stream it. Sequential on purpose: the modes share
     the machine, and a comparison whose timings depend on scheduling is not a
     comparison.
+
+    `create_run` is required and forwarded to `run_mode` — see the note there on
+    why this module never creates a run itself.
     """
+    kw["create_run"] = create_run
     results: list[dict] = []
     for mode in MODES:
         if on_progress:

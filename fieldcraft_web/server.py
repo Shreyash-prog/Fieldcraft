@@ -374,12 +374,20 @@ def end_session(response: Response):
 def start_governed_run(*, user: str, ip: str, task: str, adapter: str, grader: str,
                        review: str, max_iterations: int, budget: float,
                        policy: dict | None = None, goal: str | None = None,
-                       extra_cfg: dict | None = None) -> dict:
-    """Clamp, guard, reserve, create and drive one governed run.
+                       extra_cfg: dict | None = None, drive: bool = True) -> dict:
+    """Clamp, guard, reserve, create and (by default) drive one governed run.
 
     Returns {"brief_id", "config", "connected", "live"}. Raises HTTPException for
     every refusal (403 mock-only / live-disabled, 429 caps, 503 concurrency) so
-    both callers refuse identically.
+    every caller refuses identically.
+
+    `drive=False` is for a caller that owns the run's liveness itself — the
+    three-mode comparison drives its modes synchronously with a simulated
+    reviewer and holds one concurrency slot for the whole sequential set. Such a
+    caller takes on two duties: it must not acquire a second slot, and it MUST
+    settle or release the reservation when the run ends (see `_settle`). The
+    guards, the clamps and the reservation are identical either way — that is
+    the whole point of this function.
     """
     mine = CONNECTED.get(user, {})
     connected = task in mine
@@ -400,7 +408,7 @@ def start_governed_run(*, user: str, ip: str, task: str, adapter: str, grader: s
     res = ledger.reserve(user, ip, budget, enforce_cost=live)
     if not res.ok:
         raise HTTPException(429, res.message)
-    if not conc.acquire():
+    if drive and not conc.acquire():
         ledger.release(res.id)
         raise HTTPException(503, "too many concurrent runs; try again shortly")
 
@@ -415,10 +423,12 @@ def start_governed_run(*, user: str, ip: str, task: str, adapter: str, grader: s
     try:
         bid = engine.create(cfg, task_dir, user)
     except Exception:                      # nothing started: give the money back
-        conc.release()
+        if drive:
+            conc.release()
         ledger.release(res.id)
         raise
-    _drive(bid, gated=True)
+    if drive:
+        _drive(bid, gated=True)
     return {"brief_id": bid, "config": cfg, "connected": connected, "live": live,
             "max_iterations": max_iterations, "budget": budget}
 
@@ -861,21 +871,32 @@ def start_comparison(tid: str, req: RunComparison, request: Request,
 
     task_dir = COMPARISON_TASKS[req.task]
 
+    ip = client_ip(request)
+    # Every mode is created by the SAME helper the single-run and Run-a-task
+    # paths use, so a comparison mode is clamped and reserved exactly like any
+    # other run. drive=False because this worker drives the modes itself, in
+    # sequence, with the simulated reviewer — so it also owns settlement.
+    created: list[str] = []
+
+    def capped_create(*, mode, task_name, user_id, max_iterations, budget, extra_config):
+        started = start_governed_run(
+            user=user_id, ip=ip, task=task_name, adapter=mode.adapter,
+            grader="behavioral", review=mode.review,
+            max_iterations=max_iterations, budget=budget, policy=None,
+            goal=f"[{mode.key}] {task_name} — scripted three-mode comparison",
+            extra_cfg={"comparison_mode": mode.key, "run_kind": "comparison",
+                       "ticket_id": tid, **(extra_config or {})},
+            drive=False)
+        created.append(started["brief_id"])
+        return started["brief_id"]
+
     def worker():
         state = COMPARISONS.get(key)
         try:
             for mode in cmp_mod.MODES:
                 _set_mode(key, mode.key, "running", None)
-                # Each mode reserves like any other run. enforce_cost=False: these
-                # are offline mock costs, so they are accounted but cannot block.
-                res_id = ledger.reserve(user, client_ip(request), 2.0,
-                                        enforce_cost=False)
-                result = None
-                try:
-                    result = cmp_mod.run_mode(engine, mode, task_dir, req.task, user)
-                finally:
-                    if res_id.ok:
-                        ledger.settle(res_id.id, (result or {}).get("cost_usd", 0.0))
+                result = cmp_mod.run_mode(engine, mode, task_dir, req.task, user,
+                                          create_run=capped_create)
                 _persist_mode_result(tid, user, result)
                 _set_mode(key, mode.key, "done", result)
             with COMPARISON_LOCK:
@@ -887,15 +908,28 @@ def start_comparison(tid: str, req: RunComparison, request: Request,
                     st["finished_at"] = time.time()
         except Exception as e:                     # never let the worker die quietly
             log.exception("three-mode comparison failed for ticket %s", tid)
+            detail = getattr(e, "detail", None)     # an HTTPException from the helper
             with COMPARISON_LOCK:
                 st = COMPARISONS.get(key)
                 if st:
                     st["status"] = "error"
-                    st["error"] = f"{type(e).__name__}: {e}"
+                    st["error"] = str(detail) if detail else f"{type(e).__name__}: {e}"
                     for m in st["modes"]:
                         if m["status"] in ("queued", "running"):
                             m["status"] = "error"
         finally:
+            # drive=False made this worker responsible for the money: settle what
+            # each run actually cost, and release anything that never finished so
+            # a failed comparison cannot strand budget against the tenant's cap.
+            for bid in created:
+                try:
+                    r = engine.get(bid)
+                    if r and r["status"] in TERMINAL:
+                        _settle(r)
+                    elif r:
+                        ledger.release(r["config"].get("reservation_id", ""))
+                except Exception:              # pragma: no cover - ledger is local
+                    log.exception("could not settle comparison run %s", bid)
             conc.release()
 
     threading.Thread(target=worker, daemon=True).start()

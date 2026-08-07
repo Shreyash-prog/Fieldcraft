@@ -295,3 +295,138 @@ def test_modes_are_exactly_one_steered_and_two_unsteered():
 
 def test_no_mode_uses_a_live_provider():
     assert {m.adapter for m in cmp_mod.MODES} <= {"mock", "guided"}
+
+
+# =============================================================================
+# spend caps (B1.5) — the comparison goes through the same enforcement as
+# POST /api/briefs and POST /api/tickets/{id}/runs
+# =============================================================================
+# Before B1.5 this path called ledger.reserve(..., enforce_cost=False) directly
+# and clamped nothing, so it was the one user-triggerable run that could not be
+# blocked by a cap. It now creates every mode through server.start_governed_run.
+#
+# MUTATION CHECK: flipping the shared helper back to enforce_cost=False, or
+# re-inlining a reserve into the comparison worker, must fail
+# test_a_live_comparison_mode_is_blocked_when_the_cap_is_exhausted and
+# test_the_comparison_adds_no_second_reserve_site below. Both are written to
+# depend on the real enforcement, not on a message string alone.
+
+from fieldcraft_web.ledger import Ledger          # noqa: E402
+from fieldcraft_loop import comparison as _cmp    # noqa: E402
+
+
+def test_every_comparison_mode_is_created_through_the_shared_helper():
+    """Structural: the comparison must not create runs of its own."""
+    import inspect
+    src = inspect.getsource(_cmp)
+    assert "engine.create(" not in src, (
+        "comparison.py must not create runs directly — that is how it bypassed "
+        "the ledger before B1.5")
+    worker = inspect.getsource(server.start_comparison)
+    assert "start_governed_run" in worker
+    assert "ledger.reserve" not in worker
+
+
+def test_the_comparison_adds_no_second_reserve_site():
+    import inspect
+    src = inspect.getsource(server)
+    assert src.count("ledger.reserve(user, ip, budget, enforce_cost=live)") == 1
+    assert src.count("ledger.reserve(") == 1, "there must be exactly one reservation site"
+
+
+def test_comparison_runs_are_clamped_to_the_configured_caps(monkeypatch):
+    monkeypatch.setattr(server.settings, "max_iterations_cap", 2)
+    monkeypatch.setattr(server.settings, "max_budget_per_run_usd", 0.30)
+    c = TestClient(server.app)
+    t = make(c)
+    comp = run_comparison(c, t["id"])
+    for m in comp["modes"]:
+        cfg = server.engine.get(m["result"]["brief_id"])["config"]
+        assert cfg["max_iterations"] == 2, "an unclamped comparison mode slipped through"
+        assert cfg["budget"] == 0.30
+
+
+def test_a_scripted_comparison_still_reserves_and_settles(tmp_path, monkeypatch):
+    """Accounted-but-not-blocked: the money path is always exercised."""
+    monkeypatch.setattr(server, "ledger",
+                        Ledger(tmp_path / "l.db", global_cap=50.0, user_cap=50.0,
+                               rate_per_hour=1000))
+    c = TestClient(server.app)
+    t = make(c)
+    comp = run_comparison(c, t["id"])
+    for m in comp["modes"]:
+        cfg = server.engine.get(m["result"]["brief_id"])["config"]
+        assert cfg["reservation_id"].startswith("RSV-")
+    time.sleep(0.5)
+    spent = server.ledger.spent_user("legacy")
+    assert spent > 0, "the scripted comparison should have settled a nominal cost"
+    assert spent < 1.0, f"three mock modes should cost pennies, got {spent}"
+
+
+def test_a_live_comparison_mode_is_blocked_when_the_cap_is_exhausted(tmp_path, monkeypatch):
+    """The hole B1.5 closes.
+
+    A mode that can really spend must be refused at reservation once the tenant's
+    daily cap is gone — and no engine run may be created. The live mode never
+    reaches a provider: the refusal happens before engine.create.
+    """
+    monkeypatch.setattr(server, "ledger",
+                        Ledger(tmp_path / "cap.db", global_cap=100.0, user_cap=1.0,
+                               rate_per_hour=1000))
+    monkeypatch.setattr(server.settings, "allow_live", True)
+    # A comparison whose first mode can spend real money.
+    live_mode = _cmp.Mode(key="hitl_no_comments", label="live probe", adapter="claude",
+                          review="auto", steered=False, blurb="")
+    monkeypatch.setattr(_cmp, "MODES", (live_mode,))
+
+    c = TestClient(server.app)
+    t = make(c)
+    before = len(c.get("/api/briefs").json()["briefs"])
+    burn = server.ledger.reserve("legacy", "1.2.3.4", 1.0, enforce_cost=True)
+    assert burn.ok
+    server.ledger.settle(burn.id, 1.0)
+
+    assert c.post(f"/api/tickets/{t['id']}/comparison", json={}).status_code == 200
+    body = run_comparison_wait(c, t["id"])
+
+    assert body["status"] == "error", "an over-cap comparison must not proceed"
+    assert "cap" in (body.get("error") or "").lower(), body.get("error")
+    assert len(c.get("/api/briefs").json()["briefs"]) == before, \
+        "no engine run may be created once the cap refuses the reservation"
+
+
+def test_the_live_gate_applies_to_comparison_modes(monkeypatch):
+    """allow_live=False must refuse a live mode even with budget to spare."""
+    monkeypatch.setattr(server.settings, "allow_live", False)
+    live_mode = _cmp.Mode(key="hitl_no_comments", label="live probe", adapter="claude",
+                          review="auto", steered=False, blurb="")
+    monkeypatch.setattr(_cmp, "MODES", (live_mode,))
+    c = TestClient(server.app)
+    t = make(c)
+    c.post(f"/api/tickets/{t['id']}/comparison", json={})
+    body = run_comparison_wait(c, t["id"])
+    assert body["status"] == "error"
+    assert "live mode is disabled" in (body.get("error") or "")
+
+
+def test_a_failed_comparison_does_not_strand_budget(tmp_path, monkeypatch):
+    """drive=False made the worker responsible for settlement; a mid-run failure
+    must release rather than leave the reservation counting against the cap."""
+    monkeypatch.setattr(server, "ledger",
+                        Ledger(tmp_path / "l2.db", global_cap=50.0, user_cap=50.0,
+                               rate_per_hour=1000))
+    boom = _cmp.Mode(key="hitl_no_comments", label="boom", adapter="mock",
+                     review="auto", steered=False, blurb="")
+    monkeypatch.setattr(_cmp, "MODES", (boom,))
+
+    def _explode(*a, **k):
+        raise RuntimeError("simulated engine failure")
+    monkeypatch.setattr(server.engine, "advance", _explode)
+
+    c = TestClient(server.app)
+    t = make(c)
+    c.post(f"/api/tickets/{t['id']}/comparison", json={})
+    body = run_comparison_wait(c, t["id"])
+    assert body["status"] == "error"
+    time.sleep(0.4)
+    assert server.ledger.spent_user("legacy") == 0.0, "a failed run stranded budget"
