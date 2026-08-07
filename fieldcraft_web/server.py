@@ -30,7 +30,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from fieldcraft_loop import comparison as cmp_mod
-from fieldcraft_loop import github_source, sandbox
+from fieldcraft_loop import execution, github_source, playground, sandbox
 from fieldcraft_loop.engine import Engine, TERMINAL
 from fieldcraft_loop.pdf_context import PdfContextError, PdfStore
 from fieldcraft_loop.ticket_store import STATUSES, TicketStore
@@ -53,6 +53,8 @@ TASKS = {
     "slugify": (ROOT / "tasks" / "slugify", "single"),
     "parse_bool": (ROOT / "tasks" / "parse_bool", "single"),
     "chunk": (ROOT / "tasks" / "chunk", "single"),
+    "normalize_csv_row": (ROOT / "tasks" / "normalize_csv_row", "single"),
+    "truncate_words": (ROOT / "tasks" / "truncate_words", "single"),
     "textkit (multi-file repo)": (ROOT / "repo_tasks" / "textkit", "repo"),
 }
 
@@ -222,11 +224,17 @@ def client_ip(request: Request) -> str:
 
 @app.get("/healthz")
 def healthz():
+    _backend = execution.get_execution_backend()
     return {"ok": True, "active_runs": conc.active,
             # read from the durable ledger, so a restart does not reset it
             "daily_cost_remaining": ledger.remaining_global(),
             # which sandbox limits this machine really applies — see sandbox.py
             "sandbox_limits": list(sandbox.effective_limits()),
+            # what containment untrusted execution actually gets right now. The
+            # note is not decoration: "local-sandbox" is in-container hardening,
+            # not isolation, and a deployment should be able to see that.
+            "execution_backend": _backend.isolation_level,
+            "execution_isolation": _backend.describe(),
             # false = no invite codes configured, so the deployment is open
             "auth_enabled": auth.enabled}
 
@@ -830,6 +838,20 @@ async def stream_comparison(tid: str, user: str = Depends(require_session)):
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# --- the "Try it" playground -------------------------------------------------
+# A curated view over the same bundled scripted tasks and the same three-mode
+# comparison. It adds the story, not a second engine: running a playground task
+# is `POST /api/tickets/{id}/comparison` with that task id.
+
+@app.get("/api/playground/tasks")
+def playground_tasks(user: str = Depends(require_session)):
+    """The four curated tasks with their plain-language stories."""
+    tasks = playground.catalogue()
+    return {"tasks": tasks,
+            "featured": next((t["id"] for t in tasks if t["featured"]), None),
+            "runnable": [t["id"] for t in tasks if t["id"] in COMPARISON_TASKS]}
 
 
 @app.get("/api/tasks")

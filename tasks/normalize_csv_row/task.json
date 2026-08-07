@@ -1,0 +1,11 @@
+{"name":"normalize_csv_row","module":"normalize_csv_row","target_file":"normalize_csv_row.py",
+ "test_file":"test_normalize_csv_row.py","criteria_file":"criteria.json",
+ "stages":[".stages/stage1.py"],"solution":".solution/full.py",
+ "trap_keywords":["idempotent","twice","re-run"],
+ "story":{
+   "title":"Clean a CSV row",
+   "goal":"Clean a row of CSV data — trim whitespace, standardise casing, convert percentages.",
+   "catch":"It must be idempotent: cleaning already-clean data must change nothing. A naive first attempt converts the percentage every time, so a second pass turns a 15% discount into 0.15%.",
+   "steering":"Make it idempotent — running the cleaner twice must equal running it once.",
+   "why_it_matters":"Data pipelines get re-run: on a retry, a backfill, or a replayed message. A transform that is not idempotent silently corrupts the rows it already processed, and the damage looks like real data.",
+   "featured":true}}

@@ -11,7 +11,7 @@ Legend: **P0** = must exist before any real/untrusted connection is wired. **P1*
 ### P0-1 · Sandboxed, credential-free code execution — **PARTIALLY ADDRESSED**
 *In-container hardening is done; true isolation (microVM / isolated Machine per run) is still pending.*
 
-- **Where:** all test/build execution now goes through one chokepoint, `fieldcraft_loop/sandbox.py:run_sandboxed`. `repo_task.py:run_tests` and `effectiveness.py:run_pytest` call it and nothing else calls `subprocess` for task code.
+- **Where:** all test/build execution goes through one **execution seam**, `fieldcraft_loop/execution.py:get_execution_backend().run(...)`. `repo_task.py:run_tests` and `effectiveness.py:run_pytest` call it and nothing else calls `subprocess` for task code. The seam selects a backend from `FC_EXECUTION_BACKEND` (default `local`); the local backend delegates to the same `sandbox.py:run_sandboxed` chokepoint, which remains importable and unchanged.
 - **Original problem:** agent-authored code ran with no isolation in a process holding `ANTHROPIC_API_KEY`. Since the "connect a public GitHub repo" feature, the code being run can also be a stranger's.
 
 **What `run_sandboxed` now guarantees** (single container, one Fly Machine):
@@ -29,7 +29,16 @@ Legend: **P0** = must exist before any real/untrusted connection is wired. **P1*
 - **Limits are per-process.** N concurrent runs can each consume the full memory limit; only `FC_MAX_CONCURRENT` bounds the total.
 - **Out of scope, still unsandboxed:** the `claude` CLI invocations (`fieldcraft_loop/live_adapter.py`, `repo_adapters.py:RepoLiveAdapter`, `fieldcraft_aar/adapters.py`) run *with* ambient credentials by design — that is the agent, not the agent's output. Our own `git clone` (`github_source.py`) and `git rev-parse` (`fieldcraft_guide/bootstrap.py`) are also outside this path.
 
-- **Remaining work (still P0):** run each execution on a disposable, network-egress-controlled **isolated Fly Machine** (or gVisor/Firecracker), with filesystem confinement and secrets injected only via short-lived brokered tokens. Until then, treat a connected repo's test suite as untrusted code with internet access running as the app user.
+**The execution backends** (Phase C part 1 added the seam; it added **no isolation**):
+
+| backend | `isolation_level` | status | what it actually provides |
+|---|---|---|---|
+| `LocalSandbox` | `local-sandbox` | **current default** | The in-container hardening above. **Not** filesystem-isolated, **not** network-isolated. Fine for code we or our own agents produced inside a container we control; **not** a boundary for a stranger's code. |
+| `RemoteMachineBackend` | `remote-machine` | **stub — raises** | The pending real isolation: a disposable machine per run, no ambient credentials, restricted egress, destroyed afterwards. Provisions nothing today; selecting it raises `NotImplementedError`. |
+
+`GET /healthz` publishes `execution_backend` and `execution_isolation` (including `filesystem_isolated` / `network_isolated`, both `false` today), so a deployment can *see* which containment is in force rather than infer it. An unrecognised `FC_EXECUTION_BACKEND` raises at selection instead of falling back to local — silently giving an operator less isolation than they configured is the worst failure mode here.
+
+- **Remaining work (still P0):** implement `RemoteMachineBackend` — each execution on a disposable, network-egress-controlled **isolated Fly Machine** (or gVisor/Firecracker), with filesystem confinement and secrets injected only via short-lived brokered tokens. **It must not be enabled until an adversarial break-test suite passes**: attempts to reach the app's internal network and the Fly API, read another run's workdir, survive machine destruction, exhaust the host, and exfiltrate over DNS — plus proof that machines are destroyed even when the run crashes or the app restarts mid-run. Until that lands, `local-sandbox` is what is in force: treat a connected repo's test suite as untrusted code with internet access running as the app user.
 
 ### P0-2 · Authentication + tenant isolation — **ADDRESSED for single-operator multi-user**
 *Enterprise identity (SSO/OIDC), RBAC, and org-level tenancy are still future work.*

@@ -97,7 +97,15 @@ def is_secret_name(name: str) -> bool:
             any(h in up for h in _SECRET_HINTS))
 
 
-def build_env(home: str, extra: dict[str, str] | None = None) -> dict[str, str]:
+def _reject_secret(name: str, via: str) -> bool:
+    if is_secret_name(name):
+        log.warning("sandbox: refusing to pass %s to the child (via %s)", name, via)
+        return True
+    return False
+
+
+def build_env(home: str, extra: dict[str, str] | None = None,
+              allowlist: tuple[str, ...] | None = None) -> dict[str, str]:
     """Build the child's environment from scratch. Nothing is inherited except
     the allowlist, and `extra` cannot smuggle a secret back in.
 
@@ -107,15 +115,17 @@ def build_env(home: str, extra: dict[str, str] | None = None) -> dict[str, str]:
     TODO(HARDENING P0-1): real egress control requires running the command on an
     isolated Fly Machine / microVM, not in this container. See DEPLOY.md.
     """
-    env = {k: os.environ[k] for k in ENV_ALLOWLIST if k in os.environ}
+    # A caller-supplied allowlist goes through the same secret check as `extra`,
+    # so widening the allowlist can never be a way to smuggle a credential in.
+    names = [k for k in (allowlist or ENV_ALLOWLIST) if not _reject_secret(k, "allowlist")]
+    env = {k: os.environ[k] for k in names if k in os.environ}
     env.setdefault("PATH", _DEFAULT_PATH)
     env.setdefault("LANG", "C.UTF-8")
     env["HOME"] = home
     env["TMPDIR"] = home
     env["PYTHONHASHSEED"] = "0"       # deterministic runs (HARDENING P1-4)
     for k, v in (extra or {}).items():
-        if is_secret_name(k):
-            log.warning("sandbox: refusing to pass %s to the child", k)
+        if _reject_secret(k, "env_extra"):
             continue
         env[k] = str(v)
     return env
@@ -187,6 +197,7 @@ def _kill_group(proc: subprocess.Popen) -> None:
 
 def run_sandboxed(cmd: list[str], cwd: str | Path, timeout: int = 60, *,
                   env_extra: dict[str, str] | None = None,
+                  env_allowlist: tuple[str, ...] | None = None,
                   cpu_s: int | None = None, mem_mb: int | None = None,
                   nproc: int | None = None, fsize_mb: int | None = None) -> SandboxResult:
     """Execute `cmd` (an argv list) in `cwd` under the guarantees documented above.
@@ -201,7 +212,7 @@ def run_sandboxed(cmd: list[str], cwd: str | Path, timeout: int = 60, *,
     argv = [str(a) for a in cmd]
 
     home = tempfile.mkdtemp(prefix="fc-sandbox-")
-    env = build_env(home, env_extra)
+    env = build_env(home, env_extra, env_allowlist)
     limits = _limits(_limit("cpu_s", cpu_s), _limit("mem_mb", mem_mb),
                      _limit("nproc", nproc), _limit("fsize_mb", fsize_mb)) if resource else {}
     if not resource and not _warned:

@@ -10,6 +10,7 @@
       <div><b>Fieldcraft</b><span class="tag">CONTROL ROOM</span></div></div>
     <div class="nav">
       <button id="n-board" class="on" onclick="nav('board')"><span class="dot"></span>Board</button>
+      <button id="n-tryit" onclick="nav('tryit')"><span class="dot"></span>Try it</button>
       <div class="navsep"></div>
       <button id="n-overview" onclick="nav('overview')"><span class="dot"></span>Overview</button>
       <button id="n-run" onclick="nav('run')"><span class="dot"></span>Run a task</button>
@@ -36,6 +37,14 @@
         </div>
       </div>
       <div class="board-wrap" id="boardWrap"><div class="board" id="board"></div></div>
+    </section>
+
+    <!-- TRY IT -->
+    <section id="v-tryit" class="hide">
+      <h1 class="head">Try it</h1>
+      <p class="sub">Four small tasks, each with a catch a first attempt misses. Run one three ways
+         and watch what changes when the reviewer already knows the catch.</p>
+      <div id="tryBody"><div class="spin"><span class="s"></span>loading…</div></div>
     </section>
 
     <!-- OVERVIEW -->
@@ -233,7 +242,7 @@ async function submitCode(){
   el('gateMsg').textContent=r.status===429?'too many attempts — wait a bit':'invalid code';
 }
 
-const VIEWS=['board','overview','run','history','reports','admin'];
+const VIEWS=['board','tryit','overview','run','history','reports','admin'];
 function nav(v){
   VIEWS.forEach(x=>{
     el('v-'+x).classList.toggle('hide', x!==v); el('n-'+x).classList.toggle('on', x===v);});
@@ -241,6 +250,156 @@ function nav(v){
   if(v==='history') loadHistory();
   if(v==='board') loadBoard();
   if(v==='admin') loadInvites();
+  if(v==='tryit') loadTryIt();
+}
+
+// ---------- "Try it" playground ----------
+// Curated stories over the SAME bundled tasks and the SAME three-mode comparison
+// (A3). Nothing new runs here: picking a task creates/reuses a real ticket and
+// calls the existing comparison endpoints, so the caps and tenancy come free.
+let TRY_TASKS=[], TRY_PICK=null, TRY_TICKET={}, TRY_ES=null;
+
+async function loadTryIt(){
+  const r=await fetch('/api/playground/tasks');
+  if(!r.ok) return;
+  const d=await r.json();
+  TRY_TASKS=d.tasks;
+  if(TRY_PICK) renderTryTask(TRY_PICK); else renderTryMenu();
+}
+function renderTryMenu(){
+  const host=el('tryBody'); if(!host) return;
+  TRY_PICK=null;
+  host.innerHTML=`<div class="try-grid">${TRY_TASKS.map(t=>`
+    <button class="try-card${t.featured?' feat':''}" onclick="pickTry('${esc(t.id)}')">
+      ${t.featured?'<span class="feat-tag">start here</span>':''}
+      <div class="tt">${esc(t.title)}</div>
+      <div class="tg">${esc(t.goal)}</div>
+      <div class="tc"><span class="k">The catch</span>${esc(t.catch)}</div>
+      <div class="tgo">Run the comparison →</div>
+    </button>`).join('')}</div>`;
+}
+function pickTry(id){ TRY_PICK=id; renderTryTask(id); }
+function tryTask(id){ return TRY_TASKS.find(t=>t.id===id); }
+
+function renderTryTask(id, comparison){
+  const t=tryTask(id); if(!t) return;
+  const host=el('tryBody'); if(!host) return;
+  host.innerHTML=`
+    <button class="linkbtn" onclick="renderTryMenu()">← all four tasks</button>
+    <div class="card try-story">
+      <div class="sh"><h2>${esc(t.title)}</h2>${t.featured?'<span class="feat-tag">start here</span>':''}</div>
+      <dl class="story">
+        <dt>Goal</dt><dd>${esc(t.goal)}</dd>
+        <dt>The catch</dt><dd class="hot">${esc(t.catch)}</dd>
+        <dt>What steering does</dt><dd>${esc(t.steering)}</dd>
+        ${t.why_it_matters?`<dt>Why it matters</dt><dd class="muted">${esc(t.why_it_matters)}</dd>`:''}
+      </dl>
+      <div class="ctx-row" style="margin-top:16px">
+        <button class="act go" id="tryRun">Run all three modes</button>
+        <span class="muted" style="font-size:12px">scripted · no live agent · runs in a few seconds</span>
+      </div>
+      <p id="tryMsg" style="font-size:12.5px;min-height:16px;margin:9px 0 0"></p>
+    </div>
+    <div id="tryRunBody"></div>`;
+  el('tryRun').onclick=()=>runTry(id);
+  if(comparison) renderTryComparison(id, comparison);
+}
+
+// Find-or-create this user's ticket for the task, then drive the real A3 endpoints.
+async function tryTicketFor(id){
+  if(TRY_TICKET[id]) return TRY_TICKET[id];
+  const t=tryTask(id), title=`Try it · ${t.title}`;
+  const all=(await (await fetch('/api/tickets')).json()).tickets||[];
+  let tk=all.find(x=>x.title===title);
+  if(!tk){
+    tk=await (await fetch('/api/tickets',{method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({title, status:'done',
+        description:`Playground run of the bundled scripted task "${id}". `+
+                    `The catch: ${t.catch}`})})).json();
+  }
+  TRY_TICKET[id]=tk.id;
+  return tk.id;
+}
+async function runTry(id){
+  const btn=el('tryRun'), msg=el('tryMsg');
+  btn.disabled=true; btn.textContent='Starting…'; msg.textContent='';
+  let tid;
+  try{ tid=await tryTicketFor(id); }
+  catch(e){ btn.disabled=false; btn.textContent='Run all three modes';
+    msg.style.color='var(--red)'; msg.textContent='could not start: '+e; return; }
+  const r=await fetch(`/api/tickets/${tid}/comparison`,{method:'POST',
+    headers:{'content-type':'application/json'},body:JSON.stringify({task:id})});
+  if(!r.ok){ const d=await r.json().catch(()=>({}));
+    btn.disabled=false; btn.textContent='Run all three modes';
+    msg.style.color='var(--red)'; msg.textContent=d.detail||'could not start the comparison'; return; }
+  btn.disabled=false; btn.textContent='Run again';
+  renderTryComparison(id, await r.json());
+  watchTry(id, tid);
+}
+function watchTry(id, tid){
+  if(TRY_ES) TRY_ES.close();
+  TRY_ES=new EventSource(`/api/tickets/${tid}/comparison/stream`);
+  TRY_ES.addEventListener('state', ev=>{
+    const c=JSON.parse(ev.data);
+    if(!el('tryRunBody')){ TRY_ES.close(); return; }
+    renderTryComparison(id, c);
+    if(c.status==='done'||c.status==='error'){ TRY_ES.close(); TRY_ES=null; }
+  });
+  TRY_ES.onerror=()=>{ TRY_ES.close(); TRY_ES=null; };
+}
+function renderTryComparison(id, c){
+  const host=el('tryRunBody'); if(!host||!c) return;
+  if(c.status==='running'){
+    host.innerHTML=`<div class="card"><p class="fam">Running three ways</p>
+      <div class="cmp-run">${c.modes.map(cmpRow).join('')}</div>${SCRIPTED_NOTE}</div>`;
+    return;
+  }
+  if(c.status!=='done') return;
+  const t=tryTask(id), d=c.deltas||{}, best=d.best_mode;
+  const rows=[['iterations',r=>r.iterations],['effectiveness',r=>r.effectiveness],
+              ['cost',r=>'$'+Number(r.cost_usd).toFixed(2)],['operator q',r=>r.operator_quality]];
+  const grid='<div class="cmp-grid"><div class="rk"></div>'+
+    c.modes.map(m=>{const s=CMP_SHORT[m.mode]||['?',m.mode];
+      return `<div class="hd${m.mode===best?' best':''}" onclick="showTryTimeline('${esc(id)}','${esc(m.mode)}')"
+        title="${esc(m.blurb||'')} — click for the run timeline">${s[0]} · ${esc(s[1])}
+        <span class="sub">${m.mode===best?'fastest':'baseline'}</span></div>`;}).join('')+
+    rows.map(([n,get])=>`<div class="rk">${n}</div>`+
+      c.modes.map(m=>`<div class="v${m.mode===best&&n!=='effectiveness'?' best':''}">${
+        esc(''+get(m.result||{}))}</div>`).join('')).join('')+'</div>';
+
+  // The line that makes the numbers teach: name the catch, and say who knew it.
+  const taught=`<div class="cmp-claim taught">
+      <b>Mode 2 knew the catch and handled it on turn 1.</b>
+      <span class="eq">The steering brief named it up front — <i>${esc(t.catch)}</i>
+      Modes 1 and 3 had to discover it the slow way: they shipped a first attempt, a test failed,
+      and only then did they fix it. That is the whole difference —
+      ${d.steering_saved_iterations} iteration and $${Number(d.steering_saved_cost||0).toFixed(2)},
+      for the same effectiveness.</span></div>`;
+
+  host.innerHTML=`<div class="card"><p class="fam">Three ways · same task</p>
+      ${grid}${taught}
+      <div class="cmp-claim" style="margin-top:10px">
+        <b>Modes 1 and 3 tied.</b>
+        <span class="eq">A reviewer who only approves adds nothing an autonomous run
+        didn't already have. Steering is what helped — not the presence of a human.</span></div>
+      ${SCRIPTED_NOTE}
+      <div id="tryTl"></div></div>`;
+  TRY_LAST[id]=c;
+}
+const TRY_LAST={};
+async function showTryTimeline(id, mode){
+  const c=TRY_LAST[id]; if(!c) return;
+  const m=c.modes.find(x=>x.mode===mode); if(!m||!m.result) return;
+  const host=el('tryTl'); if(!host) return;
+  if(host.dataset.mode===mode){ host.innerHTML=''; host.dataset.mode=''; return; }
+  host.dataset.mode=mode;
+  host.innerHTML=`<div class="cmp-tl"><div class="th"><b style="font-size:12.5px">${esc(m.label)}</b>
+      <span class="mono">${esc(m.result.brief_id)}</span></div>
+      <div class="tl" id="tryTlBody"><div class="spin"><span class="s"></span>loading…</div></div></div>`;
+  const r=await fetch(`/api/briefs/${m.result.brief_id}/events`);
+  if(!r.ok||!el('tryTlBody')) return;
+  renderTimeline('tryTlBody',(await r.json()).events);
 }
 
 // ---------- operator-only invite admin ----------

@@ -1,0 +1,14 @@
+[
+ {"id":"NC1","text":"Name trimmed and title-cased",
+  "probe":{"func":"normalize_row","args":[{"name":"  ada lovelace ","email":"a@b.co","discount":"15%"}],
+           "equals":{"name":"Ada Lovelace","email":"a@b.co","discount":0.15}}},
+ {"id":"NC2","text":"Email trimmed and lower-cased",
+  "probe":{"func":"normalize_row","args":[{"name":"Ada","email":" ADA@Example.COM ","discount":"0%"}],
+           "equals":{"name":"Ada","email":"ada@example.com","discount":0.0}}},
+ {"id":"NC3","text":"Cleaning is idempotent — twice equals once",
+  "probe":{"func":"normalize_row","args":[{"name":"  ada lovelace ","email":" A@B.co ","discount":"15%"}],
+           "idempotent":true}},
+ {"id":"NC4","text":"An already-normalised discount is left alone",
+  "probe":{"func":"normalize_row","args":[{"name":"Ada","email":"a@b.co","discount":0.15}],
+           "equals":{"name":"Ada","email":"a@b.co","discount":0.15}}}
+]

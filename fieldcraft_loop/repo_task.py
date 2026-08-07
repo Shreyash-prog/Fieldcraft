@@ -16,7 +16,7 @@ from pathlib import Path
 
 from fieldcraft_aar.models import Effectiveness
 
-from .sandbox import run_sandboxed
+from .execution import get_execution_backend
 
 _IGNORE = (".git", "__pycache__", ".pytest_cache")
 
@@ -128,9 +128,14 @@ def _ambient_config_guard(workdir: Path, cmd: list[str]) -> list[str]:
 
 
 def run_tests(workdir: Path, cmd: list[str], timeout: int = 120) -> tuple[int, int, list[str]]:
-    """Run the task's test command in the sandbox (see `sandbox.run_sandboxed` for
-    what that does and does not guarantee). A timeout is a failed verdict."""
-    res = run_sandboxed([*cmd, *_ambient_config_guard(workdir, cmd)], workdir, timeout=timeout)
+    """Run the task's test command through the configured execution backend.
+
+    This is UNTRUSTED code — a connected repo's own test suite. What containment
+    it actually gets depends on the backend (`execution.py`); the default
+    `local-sandbox` is in-container hardening, not isolation. A timeout is a
+    failed verdict."""
+    res = get_execution_backend().run(
+        [*cmd, *_ambient_config_guard(workdir, cmd)], workdir, timeout=timeout)
     if res.timed_out:
         return 0, 0, ["<timeout>"]
     out = res.output

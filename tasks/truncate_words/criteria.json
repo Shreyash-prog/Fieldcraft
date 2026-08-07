@@ -1,0 +1,12 @@
+[
+ {"id":"TW1","text":"Truncates to the word limit",
+  "probe":{"func":"truncate_words","args":["the quick brown fox jumps over the lazy dog",4],
+           "equals":"the quick brown fox…"}},
+ {"id":"TW2","text":"Never cuts mid-word",
+  "probe":{"func":"truncate_words","args":["alpha beta gamma delta epsilon",2],
+           "equals":"alpha beta…"}},
+ {"id":"TW3","text":"No ellipsis when nothing was removed",
+  "probe":{"func":"truncate_words","args":["two words",5],"equals":"two words"}},
+ {"id":"TW4","text":"Exactly at the limit is not truncated",
+  "probe":{"func":"truncate_words","args":["one two three",3],"equals":"one two three"}}
+]

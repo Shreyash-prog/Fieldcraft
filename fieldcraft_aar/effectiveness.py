@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-from fieldcraft_loop.sandbox import run_sandboxed
+from fieldcraft_loop.execution import get_execution_backend
 
 from .models import Effectiveness, CriterionVerdict
 
@@ -24,11 +24,13 @@ from .models import Effectiveness, CriterionVerdict
 def run_pytest(workdir: Path) -> tuple[int, int, bool]:
     """Run pytest in workdir. Returns (passed, total, all_pass).
 
-    Goes through the one hardened execution path (`sandbox.run_sandboxed`): a
-    credential-free environment, resource limits, and a wall-clock bound from
-    FC_PYTEST_TIMEOUT_S. A timeout counts as a failed verification, not a crash."""
+    Goes through the one execution seam (`execution.get_execution_backend`),
+    whose default `local-sandbox` backend gives a credential-free environment,
+    resource limits, and a wall-clock bound from FC_PYTEST_TIMEOUT_S. The code
+    under test is UNTRUSTED. A timeout counts as a failed verification, not a
+    crash."""
     timeout = int(os.environ.get("FC_PYTEST_TIMEOUT_S", "60"))
-    res = run_sandboxed(
+    res = get_execution_backend().run(
         # `-o addopts=` and the explicit "." isolate this from any pytest.ini in an
         # *ancestor* of the workdir (this repo's own, once FC_DATA_DIR points inside
         # the project). Without it our `-q` stacks with the ini's `-q` into `-qq`,

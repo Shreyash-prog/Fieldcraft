@@ -1,0 +1,11 @@
+{"name":"truncate_words","module":"truncate_words","target_file":"truncate_words.py",
+ "test_file":"test_truncate_words.py","criteria_file":"criteria.json",
+ "stages":[".stages/stage1.py"],"solution":".solution/full.py",
+ "trap_keywords":["ellipsis","boundary","mid-word"],
+ "story":{
+   "title":"Truncate text to N words",
+   "goal":"Cut a piece of text down to N words and add an ellipsis.",
+   "catch":"Don't cut mid-word, and don't add an ellipsis when the text was already short enough. First attempts do both wrong — they slice characters and always append the '…'.",
+   "steering":"Break on word boundaries; add the ellipsis only if you actually truncated.",
+   "why_it_matters":"This is the bug behind every card preview that reads 'Fix WAL checkpoi…' or shows a stray ellipsis on a two-word title. It is small, visible to every user, and almost never caught by the happy-path test.",
+   "featured":false}}

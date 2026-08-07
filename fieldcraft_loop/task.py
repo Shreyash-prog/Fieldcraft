@@ -21,6 +21,9 @@ class Task:
     stages: list[str] = field(default_factory=lambda: [".stages/stage1_emails.py"])
     solution: str = ".solution/redact_fixed.py"
     trap_keywords: list[str] = field(default_factory=lambda: ["phone", "bare", "dashed"])
+    # Plain-language framing for the "Try it" playground: goal / catch / steering.
+    # Optional — a task without one still runs, it just cannot be presented.
+    story: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls, task_dir: str | Path) -> "Task":

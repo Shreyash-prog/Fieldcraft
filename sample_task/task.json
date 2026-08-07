@@ -1,3 +1,10 @@
 {"name":"redact_pii","module":"redact","target_file":"redact.py","test_file":"test_redact.py",
  "criteria_file":"criteria.json","stages":[".stages/stage1_emails.py"],
- "solution":".solution/redact_fixed.py","trap_keywords":["phone","bare","dashed"]}
+ "solution":".solution/redact_fixed.py","trap_keywords":["phone","bare","dashed"],
+ "story":{
+   "title":"Redact PII from text",
+   "goal":"Replace emails and phone numbers in text with [EMAIL] and [PHONE].",
+   "catch":"Phone numbers come in two formats — 415-555-2671 and (415) 555-2671 — and a first attempt handles only one of them.",
+   "steering":"Handle both phone formats up front.",
+   "why_it_matters":"A redactor that misses a format does not fail loudly — it quietly ships real phone numbers into a log or an export, and the tests that only cover the format you thought of still pass.",
+   "featured":false}}

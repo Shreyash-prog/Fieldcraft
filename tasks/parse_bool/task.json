@@ -1,3 +1,10 @@
 {"name":"parse_bool","module":"parse_bool","target_file":"parse_bool.py","test_file":"test_parse_bool.py",
  "criteria_file":"criteria.json","stages":[".stages/stage1.py"],"solution":".solution/full.py",
- "trap_keywords":["valueerror","case-insensitive"]}
+ "trap_keywords":["valueerror","case-insensitive"],
+ "story":{
+   "title":"Parse config booleans",
+   "goal":"Turn config strings into real booleans.",
+   "catch":"It is not just true/false — real configs say yes, 1, on, Y, FALSE. A first attempt handles the obvious two and silently returns False for the rest.",
+   "steering":"Accept yes/no, 1/0, on/off, case-insensitive — and raise on anything unrecognised.",
+   "why_it_matters":"Silently returning False for \"yes\" is how a feature flag stays off in production while the config file says it is on. The failure is invisible until someone asks why the rollout did nothing.",
+   "featured":false}}
