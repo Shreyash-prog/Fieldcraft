@@ -351,6 +351,30 @@ body.dragging .col-empty{display:none}
 .drop input{display:none}
 .drop.busy{opacity:.55;pointer-events:none}
 
+/* ---------- the shared run viewer (createRunner) ---------- */
+.rn-hd{display:flex;justify-content:space-between;align-items:center}
+/* the review card is the one place the UI asks the operator for a decision —
+   the amber edge is the same "your turn" signal the Run-a-task page used */
+.rn-review{border:2px solid var(--amber)}
+.rn-acts{display:flex;gap:10px;flex-wrap:wrap}
+/* inside the drawer the runner's cards are nested one level deeper, so drop the
+   outer chrome and let the drawer's own block provide it */
+.drawer .rn-status,.drawer .rn-aar{background:var(--bg-3);padding:14px 15px;margin:12px 0 0}
+.drawer .rn-review{margin:12px 0 0;padding:14px 15px}
+.drawer .rn-tl{max-height:340px;overflow-y:auto;padding-right:4px}
+
+/* ---------- ticket drawer: run once ---------- */
+.rn-lbl{display:block;font:600 10px var(--mono);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);margin:14px 0 7px}
+/* review mode is the thesis-central choice, so it gets real estate — not a
+   dropdown buried next to the engine knobs */
+.seg.rn-seg button{flex:1;min-width:120px;padding:10px 12px;font:600 12.5px var(--sans);
+  letter-spacing:0;text-transform:none}
+.rn-note{margin:8px 0 0;font-size:12.5px;line-height:1.55;color:var(--mut);min-height:34px}
+details.rn-adv{margin-top:14px}
+details.rn-adv summary{font:500 12.5px var(--sans);color:var(--mut)}
+details.rn-adv[open] summary{color:var(--ink)}
+
 /* ---------- "Try it" playground ---------- */
 .try-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
 .try-card{position:relative;display:flex;flex-direction:column;gap:7px;text-align:left;

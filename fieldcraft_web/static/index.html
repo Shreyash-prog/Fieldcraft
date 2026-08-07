@@ -110,27 +110,10 @@
         </details>
         <div class="mt"><button class="act go" id="startBtn" onclick="start()">Start run</button></div>
       </div>
-      <div class="card hide" id="statusCard">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="mono" id="briefId"></span><span class="pill" id="statusPill"><span class="dot"></span>—</span>
-        </div>
-        <div class="tl mt" id="timeline"></div>
-      </div>
-      <div class="card hide" id="reviewCard" style="border:2px solid var(--amber)">
-        <p class="fam">Your review · <span id="revTurn"></span></p>
-        <div id="revBody"></div>
-        <div class="mt"><label>Comment (for "request changes")</label>
-          <textarea id="comment" rows="2" placeholder="e.g. phone numbers are still unmasked"></textarea></div>
-        <div class="mt" style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="act go" onclick="review('approve')">Approve</button>
-          <button class="act warn" onclick="review('changes')">Request changes</button>
-          <button class="act stop" onclick="review('reject')">Reject</button></div>
-      </div>
-      <div class="card hide" id="aarCard">
-        <p class="fam">After-Action Review</p>
-        <div class="metrics" id="aarMetrics"></div>
-        <div class="mt"><div class="l muted">effectiveness trajectory</div><div class="traj" id="traj"></div></div>
-      </div>
+      <!-- filled by the shared run viewer (createRunner) — the same one the
+           ticket drawer uses, so there is one timeline/review/AAR implementation -->
+      <p class="ctx-err hide" id="runaMsg"></p>
+      <div id="runHost"></div>
     </section>
 
     <!-- HISTORY -->
@@ -176,7 +159,8 @@
 <script>
 const el=id=>document.getElementById(id);
 const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-let BID=null, es=null;
+// (run state used to live here as a module-global BID/es — it is now per-runner,
+//  see createRunner, so the drawer and the Run-a-task page cannot collide.)
 
 // ---------- access gate ----------
 // Any 401 from any call puts up the code prompt; a good code sets the session
@@ -650,8 +634,44 @@ function openTicket(id){
       <div class="ctx-block"><div class="h">▤ PDF context</div>
         <div id="pdfBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
 
+      <p class="fam" style="margin-top:24px">Run</p>
+      <div class="ctx-block">
+        <div class="h">▶ Run once</div>
+        <p class="hint">One governed develop→verify→iterate run on this ticket.
+           <span id="rnTarget"></span></p>
+        <label class="rn-lbl">Who reviews the work</label>
+        <div class="seg rn-seg" id="rnReview">
+          <button data-r="human" class="on">Human in the loop</button>
+          <button data-r="auto">Autonomous</button>
+        </div>
+        <p class="rn-note" id="rnReviewNote"></p>
+        <details class="pol rn-adv"><summary>Advanced</summary>
+          <div class="grid">
+            <div><label>Agent</label><select id="rnAdapter">
+              <option value="mock">mock (offline)</option>
+              <option value="guided">guided (Field Guide)</option>
+              <option value="claude">claude (live)</option></select></div>
+            <div><label>Judge</label><select id="rnGrader">
+              <option value="behavioral">behavioral</option>
+              <option value="tooluse">tool-use</option></select></div>
+            <div><label>Max iterations</label>
+              <input id="rnMaxit" type="number" value="5" min="1" max="10"></div>
+          </div>
+          <p class="muted" style="font-size:12px;margin:10px 0 12px">Defaults are fine —
+             these are the engine knobs, not something you need to set.</p>
+        </details>
+        <div class="ctx-row" style="margin-top:13px">
+          <button class="act go" id="rnGo">Run once</button>
+          <span class="muted" style="font-size:12px">separate from the three-mode comparison below</span>
+        </div>
+        <p class="ctx-err hide" id="rnMsg"></p>
+        <div id="rnHost"></div>
+      </div>
+
       <p class="fam" style="margin-top:24px">Delivery comparison</p>
       <div class="ctx-block"><div class="h">▶ Three-mode comparison</div>
+        <p class="hint">Not a single run — the same bundled task run three ways, to show what
+           steering changes. Use <b>Run once</b> above to actually work this ticket.</p>
         <div id="cmpBody"><div class="spin"><span class="s"></span>loading…</div></div></div>
 
       <p class="fam" style="margin-top:24px">Coming in the run phase</p>
@@ -669,7 +689,63 @@ function openTicket(id){
   el('dwSeg').addEventListener('click',async e=>{const b=e.target.closest('button'); if(!b)return;
     await moveTicket(t.id,b.dataset.s);
     el('dwSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
+  wireTicketRun(t);
   loadRepo(t.id); loadPdfs(t.id); loadComparison(t.id);
+}
+
+// ---------- single governed run, in the drawer (B2) ----------
+// Uses the B1 endpoint and the SAME run viewer as the Run-a-task page. The
+// runner is created per drawer, so opening a second ticket cannot inherit the
+// first one's stream.
+let DRAWER_RUN=null, RN_REVIEW='human';
+const RN_NOTES={
+  human: 'The loop pauses after each turn and waits for you to approve, comment, or reject.',
+  auto:  'No human turn — the loop feeds its own verdict back and runs to completion.'};
+
+function wireTicketRun(t){
+  RN_REVIEW='human';
+  DRAWER_RUN=createRunner(el('rnHost'));
+  const handle=t.repo_task_handle;
+  el('rnTarget').innerHTML = handle
+    ? `It will run the connected repository <span class="mono">${esc(handle.split(' (')[0])}</span>.`
+    : 'No repository is connected, so it runs the bundled <span class="mono">redact_pii</span> task.';
+  el('rnReviewNote').textContent=RN_NOTES.human;
+  el('rnReview').addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    RN_REVIEW=b.dataset.r;
+    el('rnReview').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    el('rnReviewNote').textContent=RN_NOTES[RN_REVIEW]||'';
+  });
+  el('rnGo').onclick=()=>runTicketOnce(t.id);
+}
+
+async function runTicketOnce(tid){
+  const btn=el('rnGo'), msg=el('rnMsg');
+  btn.disabled=true; btn.textContent='Starting…'; msg.classList.add('hide');
+  const body={review:RN_REVIEW, adapter:el('rnAdapter').value,
+              grader:el('rnGrader').value, max_iterations:+el('rnMaxit').value};
+  let r,d;
+  try{
+    r=await fetch(`/api/tickets/${tid}/runs`,{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    d=await r.json().catch(()=>({}));
+  }catch(e){
+    btn.disabled=false; btn.textContent='Run once';
+    msg.textContent='✗ '+e; msg.classList.remove('hide'); return;
+  }
+  if(!r.ok){
+    btn.disabled=false; btn.textContent='Run once';
+    // The single-run path refuses synchronously, so a cap block is legible here
+    // rather than dying silently the way an unchecked response would.
+    msg.textContent = r.status===429
+      ? '✗ Daily limit reached — ' + (d.detail || 'this run would go over your spend cap. Try again tomorrow.')
+      : '✗ ' + (d.detail || 'could not start that run');
+    msg.classList.remove('hide');
+    return;
+  }
+  btn.textContent='Run again';
+  btn.disabled=false;
+  DRAWER_RUN.attach(d.brief_id);
 }
 
 // ---------- three-mode comparison (A3) ----------
@@ -920,6 +996,7 @@ function syncPdfIds(tid,docs){
 function closeDrawer(){ const d=el('drawer'); if(d) d.remove();
   const s=el('dscrim'); if(s) s.remove(); DRAWER_ID=null;
   if(CMP_ES){ CMP_ES.close(); CMP_ES=null; }   // don't leave a stream open
+  if(DRAWER_RUN){ DRAWER_RUN.stop(); DRAWER_RUN=null; }
 }
 // Step one of the delete: swap in the confirm, don't destroy anything yet.
 function armDelete(){
@@ -991,7 +1068,8 @@ function evNode(e){
   return `<div class="ev tl-${meta[0]}"><div class="node"></div><div class="t">${meta[1]}${it}</div>${d?`<div class="d">${d}</div>`:''}</div>`;
 }
 function renderTimeline(target, events){
-  el(target).innerHTML=events.map(evNode).join('');
+  const node = typeof target === 'string' ? el(target) : target;
+  if(node) node.innerHTML=events.map(evNode).join('');
 }
 
 // ---------- run (SSE) ----------
@@ -1030,37 +1108,125 @@ async function connectRepo(){
   btn.disabled=false;
   start();                                  // same brief + SSE timeline as bundled tasks
 }
-let EVENTS=[];
+// ---------- the run viewer: ONE implementation, every surface ----------
+// A runner owns one brief's live view — SSE timeline, the human-review card, and
+// the AAR — rendered into whatever container it is given. The Run-a-task page and
+// each ticket drawer create their own, which is what un-welds run state from the
+// old module-global BID: two runs can be live in different places without
+// stepping on each other. There is deliberately exactly one EventSource on
+// /api/briefs/{id}/stream and one POST to /api/briefs/{id}/review in this file.
+function createRunner(host){
+  let bid=null, es=null, events=[], onState=null;
+  host.innerHTML=`
+    <div class="card rn-status hide">
+      <div class="rn-hd"><span class="mono rn-bid"></span>
+        <span class="pill rn-pill"><span class="dot"></span>—</span></div>
+      <div class="tl mt rn-tl"></div>
+    </div>
+    <div class="card rn-review hide">
+      <p class="fam">Your review · <span class="rn-turn"></span></p>
+      <div class="rn-verdict"></div>
+      <div class="mt"><label>Comment (for "request changes")</label>
+        <textarea class="rn-comment" rows="2"
+                  placeholder="e.g. phone numbers are still unmasked"></textarea></div>
+      <div class="mt rn-acts">
+        <button class="act go" data-kind="approve">Approve</button>
+        <button class="act warn" data-kind="changes">Request changes</button>
+        <button class="act stop" data-kind="reject">Reject</button></div>
+    </div>
+    <div class="card rn-aar hide">
+      <p class="fam">After-Action Review</p>
+      <div class="metrics rn-metrics"></div>
+      <div class="mt"><div class="l muted">effectiveness trajectory</div>
+        <div class="traj rn-traj"></div></div>
+    </div>`;
+  const q=s=>host.querySelector(s);
+  const show=(s,on)=>q(s).classList.toggle('hide',!on);
+
+  function pill(state){
+    const m={running:['run','running'],awaiting:['rev','awaiting review'],done:['done','done'],
+      needs_human:['stop','needs human'],error:['stop','error'],timeout:['stop','timed out']};
+    const v=m[state]||['','—'];
+    const p=q('.rn-pill'); p.className='pill rn-pill '+v[0];
+    p.innerHTML=`<span class="dot"></span>${v[1]}`;
+  }
+  function showReview(p){
+    if(!p){ show('.rn-review',false); return; }
+    q('.rn-turn').textContent='iteration '+p.turn;
+    q('.rn-verdict').innerHTML=diffViewer(p.diff)+verdictBlock(p);
+    show('.rn-review',true);
+  }
+  function showAAR(a){
+    if(!a||a.error) return;
+    const m=[['final_state',a.final_state],['approved by',a.approved_by||'—'],
+      ['iterations',a.iterations],['cost','$'+a.total_cost_usd],
+      ['converged @',a.turns_to_converge==null?'—':a.turns_to_converge],
+      ['rework',a.rework_turns]];
+    q('.rn-metrics').innerHTML=m.map(x=>
+      `<div class="metric"><div class="n">${x[1]}</div><div class="l">${x[0]}</div></div>`).join('');
+    q('.rn-traj').innerHTML=(a.effectiveness_trajectory||[]).map(s=>{
+      const h=Math.max(6,Math.round(s*50));
+      return `<div style="flex:1;text-align:center"><div style="background:var(--teal);height:${h}px;`+
+             `border-radius:3px"></div><div class="mono" style="font-size:10px;color:var(--mut);`+
+             `margin-top:3px">${s}</div></div>`;}).join('');
+    show('.rn-aar',true);
+  }
+  function openStream(){
+    if(es) es.close();
+    es=new EventSource(`/api/briefs/${bid}/stream`);
+    es.addEventListener('event', ev=>{
+      events.push(JSON.parse(ev.data)); renderTimeline(q('.rn-tl'), events);});
+    es.addEventListener('state', ev=>{
+      const s=JSON.parse(ev.data); es.close(); es=null;
+      if(s.status==='awaiting_review'){ pill('awaiting'); showReview(s.pending); }
+      else { pill(s.status); if(s.aar) showAAR(s.aar); }
+      if(onState) onState(s);
+    });
+    es.onerror=()=>{ if(es){ es.close(); es=null; } };
+  }
+  q('.rn-acts').addEventListener('click', async e=>{
+    const b=e.target.closest('button'); if(!b||!bid) return;
+    q('.rn-acts').querySelectorAll('button').forEach(x=>x.disabled=true);
+    await fetch(`/api/briefs/${bid}/review`,{method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({kind:b.dataset.kind, comment:q('.rn-comment').value})});
+    q('.rn-comment').value=''; show('.rn-review',false);
+    q('.rn-acts').querySelectorAll('button').forEach(x=>x.disabled=false);
+    pill('running'); openStream();
+  });
+
+  return {
+    attach(id){
+      bid=id; events=[];
+      q('.rn-bid').textContent=id; q('.rn-tl').innerHTML='';
+      show('.rn-status',true); show('.rn-review',false); show('.rn-aar',false);
+      pill('running'); openStream();
+    },
+    stop(){ if(es){ es.close(); es=null; } },
+    onState(fn){ onState=fn; },
+    get briefId(){ return bid; },
+  };
+}
+
+let RUNA=null;                      // the Run-a-task page's runner (created once)
 async function start(){
   el('startBtn').disabled=true;
+  el('runaMsg').classList.add('hide');
   const body={task:el('task').value,adapter:el('adapter').value,grader:el('grader').value,
               review:el('review').value,max_iterations:+el('maxit').value};
   const pol=buildPolicy(); if(pol) body.policy=pol;
-  const d=await (await fetch('/api/briefs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})).json();
-  BID=d.brief_id; EVENTS=[];
-  el('createCard').classList.add('hide'); el('statusCard').classList.remove('hide');
-  el('aarCard').classList.add('hide'); el('reviewCard').classList.add('hide');
-  el('briefId').textContent=BID; el('timeline').innerHTML=''; setPill('running');
-  openStream();
-}
-function openStream(){
-  if(es) es.close();
-  es=new EventSource(`/api/briefs/${BID}/stream`);
-  es.addEventListener('event', ev=>{
-    const e=JSON.parse(ev.data); EVENTS.push(e); renderTimeline('timeline', EVENTS);
-    if(e.type==='verdict' && (e.payload.diff||e.payload.last_diff)){}
-  });
-  es.addEventListener('state', ev=>{
-    const s=JSON.parse(ev.data); es.close();
-    if(s.status==='awaiting_review'){ setPill('awaiting'); showReview(s.pending); }
-    else { setPill(s.status); if(s.aar) renderAAR(s.aar); }
-  });
-  es.onerror=()=>{ es.close(); };
-}
-function setPill(s){
-  const p=el('statusPill'); const m={running:['run','running'],awaiting:['rev','awaiting review'],
-    done:['done','done'],needs_human:['stop','needs human'],error:['stop','error'],timeout:['stop','timed out']};
-  const v=m[s]||['','—']; p.className='pill '+v[0]; p.innerHTML=`<span class="dot"></span>${v[1]}`;
+  const r=await fetch('/api/briefs',{method:'POST',
+    headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok || !d.brief_id){
+    el('startBtn').disabled=false;
+    el('runaMsg').textContent='✗ '+(d.detail||'could not start that run');
+    el('runaMsg').classList.remove('hide');
+    return;
+  }
+  el('createCard').classList.add('hide');
+  RUNA = RUNA || createRunner(el('runHost'));
+  RUNA.attach(d.brief_id);
 }
 function verdictBlock(p){
   let h=`<div class="muted mono" style="margin:8px 0 6px">score ${p.score} · tests ${p.tests}`+
@@ -1071,27 +1237,6 @@ function verdictBlock(p){
     h+=`<div class="crit"><span class="mark fail">FAILING</span><span class="ev2">${esc(p.failing_tests.slice(0,5).join(', '))}</span></div>`;
   return h;
 }
-function showReview(p){
-  if(!p){el('reviewCard').classList.add('hide');return;}
-  el('revTurn').textContent='iteration '+p.turn;
-  el('revBody').innerHTML=diffViewer(p.diff)+verdictBlock(p);
-  el('reviewCard').classList.remove('hide');
-}
-function renderAAR(a){
-  if(!a||a.error)return;
-  const m=[['final_state',a.final_state],['approved by',a.approved_by||'—'],['iterations',a.iterations],
-    ['cost','$'+a.total_cost_usd],['converged @',a.turns_to_converge==null?'—':a.turns_to_converge],['rework',a.rework_turns]];
-  el('aarMetrics').innerHTML=m.map(x=>`<div class="metric"><div class="n">${x[1]}</div><div class="l">${x[0]}</div></div>`).join('');
-  el('traj').innerHTML=(a.effectiveness_trajectory||[]).map(s=>{const h=Math.max(6,Math.round(s*50));
-    return `<div style="flex:1;text-align:center"><div style="background:var(--teal);height:${h}px;border-radius:3px"></div><div class="mono" style="font-size:10px;color:var(--mut);margin-top:3px">${s}</div></div>`;}).join('');
-  el('aarCard').classList.remove('hide');
-}
-async function review(kind){
-  await fetch(`/api/briefs/${BID}/review`,{method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({kind,comment:el('comment').value})});
-  el('comment').value=''; el('reviewCard').classList.add('hide'); setPill('running'); openStream();
-}
-
 // ---------- history ----------
 async function loadHistory(){
   const b=(await (await fetch('/api/briefs')).json()).briefs;
