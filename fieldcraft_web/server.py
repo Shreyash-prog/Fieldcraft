@@ -904,7 +904,7 @@ def _persist_mode_result(tid: str, user: str, res: dict) -> None:
 def start_comparison(tid: str, req: RunComparison, request: Request,
                      user: str = Depends(require_session)):
     """Run the same bundled task three ways, sequentially, in the background."""
-    _owned_ticket(tid, user)
+    ticket = _owned_ticket(tid, user)
     if req.task not in COMPARISON_TASKS:
         raise HTTPException(400, "the comparison runs on a bundled scripted task: "
                                  + ", ".join(sorted(COMPARISON_TASKS)))
@@ -932,12 +932,16 @@ def start_comparison(tid: str, req: RunComparison, request: Request,
     # other run. drive=False because this worker drives the modes itself, in
     # sequence, with the simulated reviewer — so it also owns settlement.
     created: list[str] = []
+    # A governed ticket's comparison is governed too (B4a). Compiled exactly the
+    # way a single run compiles it, so the same policy check runs on every mode.
+    # It does not change the scripted outcome — it adds the enforcement pass.
+    cmp_policy = governance.compile_policy(ticket.get("governance_policy"))
 
     def capped_create(*, mode, task_name, user_id, max_iterations, budget, extra_config):
         started = start_governed_run(
             user=user_id, ip=ip, task=task_name, adapter=mode.adapter,
             grader="behavioral", review=mode.review,
-            max_iterations=max_iterations, budget=budget, policy=None,
+            max_iterations=max_iterations, budget=budget, policy=cmp_policy,
             goal=f"[{mode.key}] {task_name} — scripted three-mode comparison",
             extra_cfg={"comparison_mode": mode.key, "run_kind": "comparison",
                        "ticket_id": tid, **(extra_config or {})},

@@ -306,3 +306,69 @@ def test_an_unknown_ticket_is_404():
     c = TestClient(server.app)
     assert c.get("/api/tickets/TCK-nope/governance").status_code == 404
     assert c.put("/api/tickets/TCK-nope/governance", json={"policy": None}).status_code == 404
+
+
+# =============================================================================
+# B4a: the comparison inherits the ticket's policy too
+# =============================================================================
+
+def test_a_comparison_on_a_governed_ticket_is_governed():
+    """Before B4a the comparison passed policy=None, so a governed ticket's
+    three-mode run was the one unchecked thing on it."""
+    c = TestClient(server.app)
+    t = make(c)
+    c.put(f"/api/tickets/{t['id']}/governance", json={"policy": FULL})
+    assert c.post(f"/api/tickets/{t['id']}/comparison", json={}).status_code == 200
+
+    deadline = time.time() + 240
+    body = None
+    while time.time() < deadline:
+        body = c.get(f"/api/tickets/{t['id']}/comparison").json()["comparison"]
+        if body and body["status"] in ("done", "error"):
+            break
+        time.sleep(0.25)
+    assert body and body["status"] == "done", body
+
+    for m in body["modes"]:
+        cfg = server.engine.get(m["result"]["brief_id"])["config"]
+        assert cfg["policy"] is not None, f"{m['mode']} ran ungoverned"
+        assert cfg["policy"]["protected_paths"] == ["tests/", "*.env"]
+        assert "aws_key" in cfg["policy"]["forbidden_patterns"]
+        ev = server.engine.get_events(m["result"]["brief_id"])
+        assert [e for e in ev if e["type"] == "policy"], f"{m['mode']} never ran a policy check"
+
+
+def test_governance_does_not_change_the_honest_three_mode_result():
+    """The policy adds an enforcement pass; it must not move the numbers."""
+    c = TestClient(server.app)
+    plain, governed = make(c), make(c)
+    c.put(f"/api/tickets/{governed['id']}/governance", json={"policy": FULL})
+
+    out = {}
+    for label, tk in (("plain", plain), ("governed", governed)):
+        c.post(f"/api/tickets/{tk['id']}/comparison", json={})
+        deadline = time.time() + 240
+        while time.time() < deadline:
+            b = c.get(f"/api/tickets/{tk['id']}/comparison").json()["comparison"]
+            if b and b["status"] in ("done", "error"):
+                break
+            time.sleep(0.25)
+        assert b["status"] == "done", b
+        out[label] = {m["mode"]: (m["result"]["iterations"], m["result"]["cost_usd"],
+                                  m["result"]["effectiveness"]) for m in b["modes"]}
+    assert out["plain"] == out["governed"], "governance changed the comparison's result"
+
+
+def test_an_ungoverned_ticket_comparison_still_has_no_policy():
+    c = TestClient(server.app)
+    t = make(c)
+    c.post(f"/api/tickets/{t['id']}/comparison", json={})
+    deadline = time.time() + 240
+    while time.time() < deadline:
+        b = c.get(f"/api/tickets/{t['id']}/comparison").json()["comparison"]
+        if b and b["status"] in ("done", "error"):
+            break
+        time.sleep(0.25)
+    assert b["status"] == "done"
+    for m in b["modes"]:
+        assert server.engine.get(m["result"]["brief_id"])["config"]["policy"] is None

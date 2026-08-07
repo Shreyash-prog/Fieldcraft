@@ -13,7 +13,6 @@
       <button id="n-tryit" onclick="nav('tryit')"><span class="dot"></span>Try it</button>
       <div class="navsep"></div>
       <button id="n-overview" onclick="nav('overview')"><span class="dot"></span>Overview</button>
-      <button id="n-run" onclick="nav('run')"><span class="dot"></span>Run a task</button>
       <button id="n-history" onclick="nav('history')"><span class="dot"></span>History</button>
       <button id="n-reports" onclick="nav('reports')"><span class="dot"></span>Reports</button>
       <!-- operator only: revealed by /api/me, and the routes behind it 404 for
@@ -49,72 +48,72 @@
 
     <!-- OVERVIEW -->
     <section id="v-overview" class="hide">
-      <h1 class="head">How Fieldcraft works</h1>
-      <p class="sub">An AI coding agent, driven through a governed develop→verify→iterate loop, with every step recorded as an event — so the run is auditable, resumable, and measurable.</p>
-      <div class="card">
-        <svg viewBox="0 0 900 360" width="100%" style="max-width:900px">
-          <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#93a1ac"/></marker></defs>
-          <rect class="box" x="20" y="150" width="130" height="56" rx="9"/><text class="lbl" x="85" y="175" text-anchor="middle">Brief</text><text class="sub" x="85" y="192" text-anchor="middle">task + budget</text>
-          <rect class="box core" x="210" y="140" width="150" height="76" rx="9"/><text class="lbl" x="285" y="170" text-anchor="middle">Engine</text><text class="sub" x="285" y="188" text-anchor="middle">event-sourced loop</text>
-          <rect class="box" x="430" y="40" width="150" height="60" rx="9"/><text class="lbl" x="505" y="66" text-anchor="middle">Agent</text><text class="sub" x="505" y="83" text-anchor="middle">mock · guided · live</text>
-          <rect class="box" x="430" y="150" width="150" height="60" rx="9"/><text class="lbl" x="505" y="176" text-anchor="middle">Verify + Judge</text><text class="sub" x="505" y="193" text-anchor="middle">tests + LLM-as-judge</text>
-          <rect class="box" x="430" y="260" width="150" height="60" rx="9"/><text class="lbl" x="505" y="286" text-anchor="middle">Field Guide</text><text class="sub" x="505" y="303" text-anchor="middle">traps + flywheel</text>
-          <rect class="box gov" x="640" y="95" width="150" height="60" rx="9"/><text class="lbl" x="715" y="121" text-anchor="middle">Policy</text><text class="sub" x="715" y="138" text-anchor="middle">revert · escalate</text>
-          <rect class="box gov" x="640" y="205" width="150" height="60" rx="9"/><text class="lbl" x="715" y="231" text-anchor="middle">Human review</text><text class="sub" x="715" y="248" text-anchor="middle">approve · comment</text>
-          <rect class="box" x="330" y="290" width="0" height="0"/>
-          <path class="arr" d="M150,178 L208,178"/>
-          <path class="arr" d="M360,165 L428,80"/><path class="arr" d="M360,178 L428,180"/><path class="arr" d="M360,192 L428,285"/>
-          <path class="arr" d="M580,175 L638,135"/><path class="arr" d="M580,190 L638,230"/>
-          <path class="arr" d="M638,125 Q400,120 362,158"/><path class="arr" d="M638,235 Q400,300 362,200"/>
-          <rect class="box" x="210" y="285" width="150" height="52" rx="9" style="stroke-dasharray:4 3"/><text class="lbl" x="285" y="308" text-anchor="middle">Event store</text><text class="sub" x="285" y="324" text-anchor="middle">append-only log</text>
-          <path class="arr" d="M285,216 L285,283"/>
-        </svg>
-        <p class="muted mt" style="font-size:13px">Agents and judges are swappable behind one interface; the engine and event log don't change. Because the run <b>is</b> the log, it can pause for human review and resume after a restart, and the measurement layer reads the same events — no separate instrumentation.</p>
+      <h1 class="head">What Fieldcraft does</h1>
+      <p class="sub">AI writes a lot of the code now. Fieldcraft is how you tell whether that
+         work was any good — and how you set limits on what the agent is allowed to do while
+         it works.</p>
+
+      <div class="ov-two">
+        <div class="ov-half measure">
+          <span class="ov-tag">Measure</span>
+          <h2>Know how well it went</h2>
+          <p>Every run is scored against the task's real tests and its acceptance criteria —
+             not on whether the agent said it was finished. You get how many attempts it took,
+             what it cost, and whether it actually works.</p>
+        </div>
+        <div class="ov-half govern">
+          <span class="ov-tag">Govern</span>
+          <h2>Decide what it may touch</h2>
+          <p>Set the rules on a ticket: files the agent may not edit, and things it may never
+             add — secrets, dynamic code execution, network calls. Every change is checked
+             against those rules, and anything that breaks them is undone and recorded.</p>
+        </div>
       </div>
-      <div class="card"><p class="fam">Try it</p><p class="muted" style="margin-top:0">Head to <b>Run a task</b> to watch the loop live, or <b>Reports</b> to see the benchmark, measurement science, flywheel, and governance results.</p>
-        <button class="act go" onclick="nav('run')">Run a task →</button></div>
+
+      <div class="card ov-flow">
+        <p class="fam">How a piece of work moves</p>
+        <div class="ov-steps">
+          <div class="ov-step"><span class="n">1</span>
+            <b>Write a ticket</b><i>What needs doing. Attach a repo or a spec if you have one.</i></div>
+          <div class="ov-arrow">→</div>
+          <div class="ov-step"><span class="n">2</span>
+            <b>Set the rules</b><i>Optional. What's off-limits for this piece of work.</i></div>
+          <div class="ov-arrow">→</div>
+          <div class="ov-step"><span class="n">3</span>
+            <b>Run it</b><i>The agent works in short attempts. You approve, comment, or reject
+              each one — or let it run itself.</i></div>
+          <div class="ov-arrow">→</div>
+          <div class="ov-step done"><span class="n">4</span>
+            <b>See the result</b><i>Scored, with the full history of what happened and why.</i></div>
+        </div>
+        <p class="muted mt" style="font-size:13px">You stay in the loop by choice, not by
+           obligation — and either way the result is measured the same.</p>
+      </div>
+
+      <div class="ov-two">
+        <div class="card ov-cta">
+          <p class="fam">Start here</p>
+          <h2>Try it</h2>
+          <p class="muted">Four small tasks, each with a catch a first attempt misses. Run one
+             three ways and watch what changes when the reviewer already knows the catch —
+             it takes a few seconds and needs nothing set up.</p>
+          <button class="act go" onclick="nav('tryit')">Show me →</button>
+        </div>
+        <div class="card ov-cta">
+          <p class="fam">Your work</p>
+          <h2>The board</h2>
+          <p class="muted">Tickets are the real thing: connect a repository, attach the spec,
+             set the rules, and run the work with you as the reviewer.</p>
+          <button class="act ghost" onclick="nav('board')">Go to the board →</button>
+        </div>
+      </div>
+
+      <p class="ov-foot">Everything you can run here today is scripted and offline — it
+         demonstrates the mechanism honestly rather than pretending to be a live benchmark.
+         <b>Reports</b> shows what the measurement found across the bundled tasks.</p>
     </section>
 
     <!-- RUN -->
-    <section id="v-run" class="hide">
-      <h1 class="head">Run a task</h1>
-      <p class="sub">Watch an AI agent work the task through the governed loop, streamed live. Step in as reviewer; see it scored.</p>
-      <div class="card" id="createCard">
-        <p class="fam">New brief</p>
-        <div class="grid">
-          <div><label>Task</label><select id="task"></select></div>
-          <div><label>Agent</label><select id="adapter"><option value="mock">mock (offline)</option><option value="guided">guided (Field Guide)</option><option value="claude">claude (live)</option></select></div>
-          <div><label>Judge</label><select id="grader"><option value="behavioral">behavioral</option><option value="tooluse">tool-use</option></select></div>
-          <div><label>Review</label><select id="review"><option value="human">human-in-the-loop</option><option value="auto">auto</option></select></div>
-          <div><label>Max iterations</label><input id="maxit" type="number" value="5" min="1" max="10"></div>
-        </div>
-        <details class="pol"><summary>⎇ Connect a public GitHub repo</summary>
-          <label>Repository URL (public, https)</label>
-          <div class="chkrow" style="align-items:center;flex-wrap:nowrap">
-            <input id="repoUrl" placeholder="https://github.com/owner/repo">
-            <button class="act ghost" id="connectBtn" style="white-space:nowrap" onclick="connectRepo()">Connect &amp; run</button>
-          </div>
-          <p class="muted" style="font-size:12px;margin:0 0 10px">Shallow-cloned read-only (size-capped, timed out) and run with the offline mock agent: the loop runs the repo’s own test suite and reports its baseline. Nothing is written back to GitHub. Dependencies are not installed, so a repo that needs them will honestly report 0 tests.</p>
-          <p class="muted mono" id="connectMsg" style="font-size:12px;margin:0 0 10px"></p>
-        </details>
-        <details class="pol"><summary>⚖︎ Governance policy (optional)</summary>
-          <label>Protected paths (comma-separated globs the agent may not edit)</label>
-          <input id="polProtected" placeholder="tests/, *.env">
-          <div class="chkrow mt">
-            <span class="muted" style="font-size:12px">Forbid in added code:</span>
-            <label class="chk"><input type="checkbox" id="fbSecret" checked> secrets</label>
-            <label class="chk"><input type="checkbox" id="fbEval" checked> eval/exec</label>
-            <label class="chk"><input type="checkbox" id="fbNet"> network calls</label>
-          </div>
-          <p class="muted" style="font-size:12px;margin:0 0 10px">Violations are reverted and logged; the run still tries to converge on the legit fix.</p>
-        </details>
-        <div class="mt"><button class="act go" id="startBtn" onclick="start()">Start run</button></div>
-      </div>
-      <!-- filled by the shared run viewer (createRunner) — the same one the
-           ticket drawer uses, so there is one timeline/review/AAR implementation -->
-      <p class="ctx-err hide" id="runaMsg"></p>
-      <div id="runHost"></div>
-    </section>
 
     <!-- HISTORY -->
     <section id="v-history" class="hide">
@@ -226,7 +225,7 @@ async function submitCode(){
   el('gateMsg').textContent=r.status===429?'too many attempts — wait a bit':'invalid code';
 }
 
-const VIEWS=['board','tryit','overview','run','history','reports','admin'];
+const VIEWS=['board','tryit','overview','history','reports','admin'];
 function nav(v){
   VIEWS.forEach(x=>{
     el('v-'+x).classList.toggle('hide', x!==v); el('n-'+x).classList.toggle('on', x===v);});
@@ -735,13 +734,23 @@ function renderGovernance(tid, pol){
     <div class="gov-flags">${GOV_FLAGS.map(([k,label,hint])=>`
       <label class="gov-flag"><input type="checkbox" id="gov_${k}"${forbid[k]?' checked':''}>
         <span><b>${esc(label)}</b><i>${esc(hint)}</i></span></label>`).join('')}</div>
-    <div class="ctx-row" style="margin-top:14px">
+    <div class="ctx-row" style="margin-top:14px" id="govRow">
       <button class="act go" id="govSave">Save policy</button>
-      ${pol?`<button class="act ghost" id="govClear">Remove policy</button>`:''}
+      ${pol?`<button class="act ghost" id="govClear">Remove policy…</button>`:''}
     </div>
     <p id="govMsg" style="font-size:12.5px;min-height:16px;margin:9px 0 0"></p>`;
   el('govSave').onclick=()=>saveGovernance(tid);
-  if(el('govClear')) el('govClear').onclick=()=>saveGovernance(tid, true);
+  if(el('govClear')) el('govClear').onclick=()=>armGovClear(tid);
+}
+// Two-step, like deleting a ticket: loosening governance is consequential, so it
+// does not happen on a single click.
+function armGovClear(tid){
+  const row=el('govRow'); if(!row) return;
+  row.innerHTML=`<span class="gov-warn">Remove the policy? This ticket's runs become ungoverned.</span>
+    <button class="act stop" id="govClearYes">Yes, remove it</button>
+    <button class="act ghost" id="govClearNo">Cancel</button>`;
+  el('govClearYes').onclick=()=>saveGovernance(tid, true);
+  el('govClearNo').onclick=()=>renderGovernance(tid, GOV_STATE);
 }
 function govSummary(pol){
   const bits=[];
@@ -1157,42 +1166,6 @@ function renderTimeline(target, events){
   if(node) node.innerHTML=events.map(evNode).join('');
 }
 
-// ---------- run (SSE) ----------
-async function loadTasks(){
-  const r=await fetch('/api/tasks');
-  if(!r.ok) return;                     // 401 already raised the gate
-  const t=(await r.json()).tasks;
-  el('task').innerHTML=t.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
-}
-function buildPolicy(){
-  const prot=el('polProtected').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const forbid={};
-  if(el('fbSecret').checked){forbid.hardcoded_secret="(?i)(api[_-]?key|secret|password|token)\\s*=\\s*['\"][A-Za-z0-9/+_-]{12,}";forbid.aws_key="AKIA[0-9A-Z]{16}";}
-  if(el('fbEval').checked) forbid.dynamic_exec="\\b(eval|exec)\\s*\\(";
-  if(el('fbNet').checked) forbid.network_call="\\b(requests\\.(get|post)|urllib\\.request\\.urlopen|socket\\.socket)\\b";
-  if(!prot.length && !Object.keys(forbid).length) return null;
-  return {protected_paths:prot, editable_paths:["**"], forbidden_patterns:forbid};
-}
-async function connectRepo(){
-  const url=el('repoUrl').value.trim();
-  const msg=el('connectMsg'), btn=el('connectBtn');
-  if(!url){ msg.textContent='enter a public https://github.com/<owner>/<repo> URL'; return; }
-  btn.disabled=true; msg.textContent='cloning…';
-  let d;
-  try{
-    const r=await fetch('/api/repos/connect',{method:'POST',headers:{'content-type':'application/json'},
-                                              body:JSON.stringify({url})});
-    d=await r.json();
-    if(!r.ok){ msg.textContent='✗ '+(d.detail||'connect failed'); btn.disabled=false; return; }
-  }catch(e){ msg.textContent='✗ '+e; btn.disabled=false; return; }
-  await loadTasks();
-  el('task').value=d.task; el('adapter').value='mock'; el('grader').value='behavioral';
-  msg.textContent=`✓ ${d.repo.name} @ ${d.repo.default_branch} · ${d.repo.file_count} files · `+
-                  `${d.repo.size_mb} MB · tests: ${d.test_command.join(' ')}`+
-                  (d.tests_detected?'':' · ⚠ no test suite found — the verdict will report 0 tests');
-  btn.disabled=false;
-  start();                                  // same brief + SSE timeline as bundled tasks
-}
 // ---------- the run viewer: ONE implementation, every surface ----------
 // A runner owns one brief's live view — SSE timeline, the human-review card, and
 // the AAR — rendered into whatever container it is given. The Run-a-task page and
@@ -1258,6 +1231,10 @@ function createRunner(host){
   }
   function openStream(){
     if(es) es.close();
+    // The stream replays the run's whole event log from the start on every
+    // connection, and we reconnect after each review — so reset rather than
+    // append, or the timeline shows the run's history N times over.
+    events=[];
     es=new EventSource(`/api/briefs/${bid}/stream`);
     es.addEventListener('event', ev=>{
       events.push(JSON.parse(ev.data)); renderTimeline(q('.rn-tl'), events);});
@@ -1293,26 +1270,6 @@ function createRunner(host){
   };
 }
 
-let RUNA=null;                      // the Run-a-task page's runner (created once)
-async function start(){
-  el('startBtn').disabled=true;
-  el('runaMsg').classList.add('hide');
-  const body={task:el('task').value,adapter:el('adapter').value,grader:el('grader').value,
-              review:el('review').value,max_iterations:+el('maxit').value};
-  const pol=buildPolicy(); if(pol) body.policy=pol;
-  const r=await fetch('/api/briefs',{method:'POST',
-    headers:{'content-type':'application/json'},body:JSON.stringify(body)});
-  const d=await r.json().catch(()=>({}));
-  if(!r.ok || !d.brief_id){
-    el('startBtn').disabled=false;
-    el('runaMsg').textContent='✗ '+(d.detail||'could not start that run');
-    el('runaMsg').classList.remove('hide');
-    return;
-  }
-  el('createCard').classList.add('hide');
-  RUNA = RUNA || createRunner(el('runHost'));
-  RUNA.attach(d.brief_id);
-}
 function verdictBlock(p){
   let h=`<div class="muted mono" style="margin:8px 0 6px">score ${p.score} · tests ${p.tests}`+
     (p.criteria_total>0?` · criteria ${p.criteria_met}/${p.criteria_total}`:'')+`</div>`;
@@ -1383,7 +1340,6 @@ const RENDER={
 el('invApprove').onclick=()=>approveInvite();
 el('invEmail').onkeydown=e=>{if(e.key==='Enter') approveInvite();};
 loadBoard();      // Board is the front door
-loadTasks();
 loadMe();         // reveals the operator-only nav, if this session is one
 </script>
 </body></html>

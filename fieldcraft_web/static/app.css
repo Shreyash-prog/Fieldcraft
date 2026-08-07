@@ -375,6 +375,41 @@ details.rn-adv{margin-top:14px}
 details.rn-adv summary{font:500 12.5px var(--sans);color:var(--mut)}
 details.rn-adv[open] summary{color:var(--ink)}
 
+/* ---------- overview: the front door ---------- */
+.ov-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;
+  margin-bottom:16px}
+.ov-half{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;
+  background:var(--glass)}
+/* the two halves of the product get the two accents already in the system:
+   teal for what you learn, amber for what you restrict */
+.ov-half.measure{border-color:var(--teal-line);
+  background:linear-gradient(180deg,var(--teal-dim),transparent)}
+.ov-half.govern{border-color:rgba(242,181,68,.3);
+  background:linear-gradient(180deg,var(--amber-dim),transparent)}
+.ov-tag{display:inline-block;font:600 9px var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  border-radius:20px;padding:3px 10px;margin-bottom:11px}
+.ov-half.measure .ov-tag{color:var(--teal);border:1px solid var(--teal-line)}
+.ov-half.govern .ov-tag{color:var(--amber);border:1px solid rgba(242,181,68,.35)}
+.ov-half h2{margin:0 0 8px;font:650 19px/1.25 var(--display);letter-spacing:-.02em}
+.ov-half p{margin:0;color:var(--mut);font-size:13.5px;line-height:1.6}
+
+.ov-steps{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;margin-top:4px}
+.ov-step{flex:1 1 180px;min-width:170px;border:1px solid var(--line);border-radius:11px;
+  padding:13px 14px;background:var(--bg-3);display:flex;flex-direction:column;gap:4px}
+.ov-step.done{border-color:var(--teal-line);background:var(--teal-dim)}
+.ov-step .n{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;
+  background:var(--glass-2);font:700 10px var(--mono);color:var(--faint);margin-bottom:3px}
+.ov-step.done .n{background:var(--teal);color:#03130f}
+.ov-step b{font:600 13.5px var(--sans);color:var(--ink)}
+.ov-step i{font-style:normal;font-size:12.5px;line-height:1.5;color:var(--mut)}
+.ov-arrow{align-self:center;color:var(--faint);font-size:16px}
+@media(max-width:900px){.ov-arrow{display:none}}
+
+.ov-cta h2{margin:0 0 8px;font:650 19px var(--display);letter-spacing:-.02em}
+.ov-cta p{font-size:13.5px;line-height:1.6;margin:0 0 15px}
+.ov-foot{margin:4px 0 0;font-size:12.5px;line-height:1.6;color:var(--faint);max-width:80ch}
+.ov-foot b{color:var(--mut)}
+
 /* ---------- per-ticket governance ---------- */
 .gov-off{padding:9px 11px;border:1px dashed var(--line);border-radius:9px;
   font-size:12.5px;color:var(--faint);margin-bottom:13px}
@@ -383,6 +418,7 @@ details.rn-adv[open] summary{color:var(--ink)}
   font-size:12.5px;color:var(--ink);margin-bottom:13px}
 .gov-on .k{font:600 9px var(--mono);letter-spacing:.12em;text-transform:uppercase;
   color:var(--amber);flex:none}
+.gov-warn{flex:1;min-width:180px;font-size:12.5px;line-height:1.5;color:var(--amber)}
 .gov-flags{display:flex;flex-direction:column;gap:8px}
 .gov-flag{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);
   border-radius:9px;background:var(--bg-3);cursor:pointer;
