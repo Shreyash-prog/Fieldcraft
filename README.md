@@ -1,108 +1,117 @@
 # Fieldcraft
 
-**Measuring how effectively people deliver with AI.**
+**Measure and govern AI-assisted software delivery.**
 
-Coding agents made *building* cheap. What almost nobody measures is the *delivery*: when an engineer works a task with an AI agent, did they ship faster, cheaper, and better — and where is the improvable gap? Agent-reliability tooling grades the *agent*. Fieldcraft grades the *human + AI loop*.
+AI made writing code fast. It didn't make *trusting* what shipped any easier. A pull request marked "done" might be solid or fragile — and from the outside they look identical. Fieldcraft runs AI coding work through a governed loop that **measures how well it was done** and **governs what the agent is allowed to do**, so "done" means something again.
 
-This repo is two things, in order of importance:
+🔗 **Live preview:** [fieldcraft-shreyash.fly.dev](https://fieldcraft-shreyash.fly.dev) — a working, deployed instance. Access is invite-gated (request a code from the landing page); the demo runs on curated, deterministic tasks so anyone can see the same result.
 
-- **A working v0 (`fieldcraft_aar/`)** — a small, runnable harness that instruments an AI-assisted coding task and emits an After-Action Review: effectiveness, efficiency, and how well the operator drove the agent.
-- **A design exploration (`docs/architecture.md`)** — the larger system this measurement layer belongs to.
-
----
-
-## Run it — 30 seconds, no credentials
-
-```bash
-pip install -r requirements.txt
-python -m fieldcraft_aar --adapter mock
-# → out/aar.json and a self-contained out/aar_report.html
-```
-
-![After-Action Review report](assets/aar_report.png)
-
-The demo runs the same task two ways — a rich-context run and a thin-context run. Both reach **identical effectiveness** (all tests pass, all acceptance criteria met), but one costs **2.2× the other**, with the gap attributed to input context quality. That delta is invisible to agent-reliability scoring, and it is the whole point.
-
-Effectiveness is **real** — the harness actually runs the task's `pytest` suite and probes the resulting code against each acceptance criterion. Only the run *trace* (cost/turns) is replayed in mock mode.
+![Fieldcraft overview](docs/overview.png)
 
 ---
 
-## What it measures
+## The problem
 
-| Family | Answers | Signals |
-|---|---|---|
-| **Effectiveness** | Was the outcome good? | tests passing, acceptance criteria met, composite score |
-| **Efficiency** | What did it cost? | cost (USD), turns, tool calls, wall-clock |
-| **AI-usage quality** | How well did the operator drive the AI? | turns-to-converge, rework turns, directive efficiency, input spec completeness |
+When an AI agent writes the code, the old signals stop working:
 
-Efficiency is compared **only at constant effectiveness** — "used less" counts as better *only when the outcome is held equal*, never for cutting corners.
+- **"Done" is unreliable.** A closed ticket might be done-and-solid or done-and-fragile. The status doesn't tell you which.
+- **Passing tests aren't enough.** A test suite checks whether code *runs*, not whether it's *safe* or *robust under the edge cases nobody wrote a test for*.
+- **You can't see how it was built.** Was a human steering carefully, or did an agent run autonomously? That context is gone the moment the branch merges.
 
----
-
-## Is the judge trustworthy? — measured
-
-Open-ended acceptance criteria are graded by a Claude **forced tool-use** judge, so
-the obvious question is whether that judge agrees with a human. Calibrated against
-38 hand-labeled fixtures:
-
-> **Mean Cohen's kappa 0.886 across 5 live runs** (range 0.856–0.916, SD 0.022),
-> **94.5% agreement over 152 forced-tool-use judgments** per run. Perfect agreement
-> on 3 of 4 criteria, with a **characterized conservative bias on AC4**
-> (idempotence edge cases).
-
-Every one of the 42 disagreements across 760 judgments was the same direction — the
-judge saying `unmet` where the label said `met`. There were no false `met` verdicts,
-so the judge under-reports effectiveness rather than inflating it.
-
-Scope, stated plainly: **5 runs on one fixture set for one task — not a large
-study**, and the fixtures are committed rather than held out, so they can be tuned
-against. Raw per-run numbers, method, and limits: [`docs/CALIBRATION.md`](docs/CALIBRATION.md).
-
-```bash
-python -m fieldcraft_aar.calibration --grader tooluse   # reproduce (needs ANTHROPIC_API_KEY)
-python -m fieldcraft_aar.calibration                    # offline, deterministic grader
-```
+Fieldcraft is built around a simple idea: **the run itself is the evidence.** Every AI-assisted task runs through a develop → verify → iterate loop where each step is recorded, so the work is measurable, auditable, and governable — not a black box.
 
 ---
 
-## Live mode
+## What it does
 
-```bash
-python -m fieldcraft_aar --adapter claude --grader claude --conditions rich_context
-```
+### A board for AI-assisted work
 
-Runs a real Claude Code session (`claude -p --output-format json`) in a fresh workdir and parses its cost/turns. The `RunAdapter` seam is the design: the metrics are **model- and framework-agnostic** — point it at any agent that edits a repo, and the measurement layer doesn't care which model produced the work.
+Every task is a ticket. Attach a repository and context documents, set a governance policy, and run it — either as a single governed run you review turn by turn, or as a three-way comparison that shows how human involvement changes the outcome.
+
+![The board](docs/board.png)
+
+### It measures whether steering actually helps
+
+This is the core demonstration. The **same task, run three ways** — a reviewer who only approves, a reviewer who gives real feedback, and a fully autonomous run — measured side by side:
+
+![Three-mode comparison](docs/comparison.png)
+
+The result is honest and often counterintuitive: a reviewer who just approves adds **nothing** an autonomous run didn't already have. What helped was the *quality of the steering* — the reviewer who named the catch up front converged faster and cheaper, for the same final quality. **Steering changed the cost of getting there, not the outcome.** Fieldcraft measures that difference directly.
+
+> The comparison runs on curated, scripted tasks *by design* — that keeps the demonstration deterministic and reproducible, so you see the same clean result every time rather than the noise a live agent would introduce.
+
+### Try it yourself — no setup
+
+A set of small, self-explanatory tasks, each with a hidden "catch" a first attempt tends to miss. Run any of them three ways and watch what changes.
+
+![Try it](docs/tryit.png)
+
+### It governs what the agent may do
+
+Each ticket carries a policy — protected paths the agent may not touch, and forbidden patterns (hardcoded secrets, `eval`/`exec`, network calls). The agent's changes are checked against it on every turn; violations are reverted and logged. This is the "govern" half, made tangible.
+
+One of the Try-it tasks demonstrates it: the agent's naive attempt hides a hardcoded secret that **passes every test** — and the governance gate catches and reverts what the tests couldn't:
+
+![Governance gate catching a violation](docs/governance.png)
+
+### Everything in one place, per ticket
+
+Connect a repo, add PDF context, set governance, run and review — all from a single ticket. Start a governed run and choose who reviews it:
+
+![Ticket drawer — running a governed task](docs/drawer1.png)
+
+Set the policy the agent's changes are checked against, per ticket:
+
+![Ticket drawer — per-ticket governance](docs/drawer2.png)
+
+And attach the repository and context documents the run should use:
+
+![Ticket drawer — repo and PDF context](docs/drawer3.png)
 
 ---
 
-## Layout
+## Is the measurement trustworthy?
 
-```
-fieldcraft_aar/      the harness: adapters · effectiveness · telemetry · aar · report
-sample_task/         a small PII-redaction task (stub, tests, criteria, reference solution)
-sample_task/fixtures 38 hand-labeled candidates the judge is calibrated against
-scenarios/           recorded run traces for offline mock mode
-docs/architecture.md the broader design this slice belongs to
-docs/CALIBRATION.md  measured judge calibration — raw five-run results and method
-```
+The quality signals are only as good as the judge behind them. Fieldcraft's LLM-as-judge was calibrated against a labeled set of real runs:
 
----
+- **Mean Cohen's κ = 0.886 across 5 live runs** (range 0.856–0.916)
+- **94.5% agreement** over 152 forced-tool-use judgments per run
+- Perfect agreement on 3 of 4 criteria, with a characterized, consistent bias on the fourth (idempotence edge cases)
 
-## The bigger picture
-
-This harness is one layer of a larger design for AI-assisted forward-deployed engineering — trust boundary, execution model, verification, governance, and this measurement layer. That design lives in [`docs/architecture.md`](docs/architecture.md), written as an exploration.
-
-To be clear about status: **the measurement slice in this repo runs; the full architecture is a design, not a shipped system.** The interesting, differentiated, and *built* part is the measurement of human + AI delivery.
+These are 5 runs on one fixture set for one task — a real, measured, reproducible result, not a large study. The point is that the number is *measured and characterized*, not asserted. (Full method and raw results in [`docs/CALIBRATION.md`](docs/CALIBRATION.md).)
 
 ---
 
-## Status & limits
+## Built to be trusted, not just to work
 
-- **v0.** The mock scenarios are illustrative traces; live mode produces real numbers.
-- **Fair cross-operator comparison needs N.** Difficulty-adjusting real, different tasks to isolate operator skill improves with data — it is a direction, not a solved ranking engine. Standardized benchmark tasks (like the sample) give clean apples-to-apples soonest.
-- Effectiveness rests on test quality — passing tests narrow the correctness gap, they don't close it.
-- **The judge is calibrated, not solved.** kappa 0.886 ± 0.022 is five runs over one committed fixture set; a held-out set, an ensemble, and cross-task calibration are outstanding ([HARDENING P1-3](HARDENING.md)). Re-run calibration after any model, prompt, or criteria change — the number does not transfer.
+Fieldcraft is a live, multi-user product, and the engineering reflects that:
 
-## License
+- **Access is gated.** Invite-only, with an operator admin view to approve and revoke access.
+- **Spend is capped.** Per-user and global daily cost caps, enforced durably — every run path (single run, three-mode comparison) reserves against the same ledger, so nothing can run uncapped.
+- **Execution is hardened.** Untrusted code runs credential-free (the API key is absent by construction), resource-limited, and process-isolated. The current isolation level is reported honestly at `/healthz`.
+- **The metrics resist gaming.** The verification-integrity check catches weakened or deleted tests, because an accountability layer you can cheat is worthless.
 
-MIT — see [LICENSE](LICENSE).
+Where something isn't fully built yet, the product says so — honest labels over impressive-looking fakes.
+
+---
+
+## The vision
+
+The board is one lens on a larger idea: **one measurement-and-governance engine, served through many role lenses.** The same recorded runs answer different questions for different people —
+
+- **The engineer** — accountability for robustness, security, cost discipline, and the quality of their steering.
+- **The PM / scrum master** — delivery truth: trustworthy "done," quality-adjusted velocity, visible rework, where a release is fragile.
+- **QA** — where to focus scarce review attention, and provenance for how each change was built.
+- **Platform / Ops** — tracing a production incident back to how the AI built the thing that broke.
+- **Agent access control** — brokering *just enough* access to the tools engineering uses, scoped and audited.
+- **Team memory** — recommending how a similar problem was solved before, so experience compounds instead of evaporating.
+
+See [`VISION.md`](VISION.md) for the full picture.
+
+---
+
+## Status
+
+A working, deployed product with a governed run loop, a calibrated judge, per-ticket governance, a three-mode measurement comparison, a guided playground, and gated multi-user access with durable spend caps. The comparison and playground run on curated deterministic tasks; live-agent execution against arbitrary repositories is the next frontier and is deliberately gated behind per-run isolation work that isn't finished yet.
+
+Honesty about what's real is a feature here, not a caveat.
