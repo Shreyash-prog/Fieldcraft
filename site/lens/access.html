@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The least-privilege control plane — Fieldcraft</title>
+<meta name="description" content="“How does an agent get just enough access — no more, no less?” Fieldcraft brokers access to any tool engineering already uses: scoped to the task, time-limited, issued just-in-time">
+<meta property="og:title" content="The least-privilege control plane — Fieldcraft">
+<meta property="og:description" content="“How does an agent get just enough access — no more, no less?” Fieldcraft brokers access to any tool engineering already uses: scoped to the task, time-limited, issued just-in-time">
+<meta property="og:type" content="article">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add('js')</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%2314e0b0'/><text x='16' y='23' font-size='19' font-weight='700' font-family='sans-serif' text-anchor='middle' fill='%2303130f'>F</text></svg>">
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <a class="brand" href="../index.html">
+    <span class="logo">F</span>
+    <span class="brand-t"><b>Fieldcraft</b><i>CONTROL ROOM</i></span>
+  </a>
+  <nav class="nav-links">
+    <a href="../index.html#proof">Proof</a>
+    <a href="../index.html#product">Product</a>
+    <a href="../index.html#vision">Vision</a>
+    <a href="../index.html#status">Status</a>
+  </nav>
+  <div class="nav-right">
+    <a class="icn" href="https://github.com/Shreyash-prog/Fieldcraft/tree/main" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+    <a class="icn" href="https://www.linkedin.com/in/shreyash-k-a89823174/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M3.6 5.3H.9V15h2.7V5.3ZM2.25 1A1.55 1.55 0 1 0 2.25 4.1 1.55 1.55 0 0 0 2.25 1ZM15 9.5c0-2.6-1.4-3.8-3.25-3.8-1.5 0-2.17.82-2.54 1.4V5.3H6.5c.04.76 0 9.7 0 9.7h2.71V9.6c0-.24.02-.49.09-.66.19-.49.63-1 1.38-1 .97 0 1.36.74 1.36 1.83V15H15V9.5Z"/></svg></a>
+    <a class="btn btn-sm" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Live demo</a>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span>
+    </button>
+  </div>
+</header>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="../index.html#proof">Proof</a><a href="../index.html#product">Product</a>
+  <a href="../index.html#vision">Vision</a><a href="../index.html#status">Status</a>
+  <a href="../index.html#try">Try it</a>
+</div>
+
+<main class="lp">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <a class="backlink" href="../index.html#vision">← All six lenses</a>
+    <span class="lp-half is-govern">Govern · Lens 05</span>
+    <p class="lp-role">Agent access control</p>
+    <h1>The least-privilege control plane</h1>
+    <p class="lp-q">“How does an agent get <em>just</em> enough access — no more, no less?”</p>
+
+    <div class="lp-cols">
+      <section class="lp-block">
+        <h2 class="lp-sh">The problem</h2>
+        <p>An agent cannot work without access, and every grant is attack surface. Too much and it can drop a table, delete a bucket, or read data it was never meant to see. Too little and someone quietly hands it broad credentials at 6pm “just to unblock it” — which is how standing access gets created and never revoked.</p>
+      </section>
+      <section class="lp-block is-do">
+        <h2 class="lp-sh">What Fieldcraft does</h2>
+        <p>Fieldcraft brokers access to <b>any tool engineering already uses</b>: scoped to the task, time-limited, issued just-in-time, and fully audited. Destructive operations do not pass — they stop at a human approval gate. The boundaries are configured by the customer, because only the customer knows where they are.</p>
+      </section>
+    </div>
+
+    <figure class="dia">
+      <div class="dia-head">The least-privilege control plane</div>
+      <div class="dia-scroll">
+        <svg viewBox="0 0 880 450" role="img" aria-labelledby="dt-access">
+          <title id="dt-access">The least-privilege control plane — diagram</title>
+          <defs>
+      <marker id="ah" viewBox="0 0 9 9" refX="7.6" refY="4.5" markerWidth="6.4" markerHeight="6.4" orient="auto-start-reverse">
+        <path d="M0.8 1 L7.4 4.5 L0.8 8" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+      <marker id="aha" viewBox="0 0 9 9" refX="7.6" refY="4.5" markerWidth="6.4" markerHeight="6.4" orient="auto-start-reverse">
+        <path d="M0.8 1 L7.4 4.5 L0.8 8" fill="none" stroke="#14e0b0" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+      <marker id="ahw" viewBox="0 0 9 9" refX="7.6" refY="4.5" markerWidth="6.4" markerHeight="6.4" orient="auto-start-reverse">
+        <path d="M0.8 1 L7.4 4.5 L0.8 8" fill="none" stroke="#f2b544" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+          <rect class="d-node" x="16" y="178" width="156" height="88" rx="11"/><text class="d-t" x="38" y="212">Agent</text><text class="d-f" x="38" y="236">needs access</text><text class="d-f" x="38" y="254">to do the work</text><rect class="d-node-a" x="240" y="62" width="250" height="312" rx="11"/><text class="d-ka" x="264" y="96">ACCESS BROKER</text><text class="d-t" x="264" y="126">Just enough. No more.</text><rect class="d-node" x="260" y="150" width="210" height="46" rx="8"/><text class="d-ka" x="276" y="169">SCOPE</text><text class="d-f" x="276" y="187">only what this task needs</text><rect class="d-node" x="260" y="204" width="210" height="46" rx="8"/><text class="d-ka" x="276" y="223">TIME-LIMIT</text><text class="d-f" x="276" y="241">ephemeral, just-in-time</text><rect class="d-node" x="260" y="258" width="210" height="46" rx="8"/><text class="d-ka" x="276" y="277">GUARDRAILS</text><text class="d-f" x="276" y="295">destructive ops gated</text><rect class="d-node" x="260" y="312" width="210" height="46" rx="8"/><text class="d-ka" x="276" y="331">AUDIT</text><text class="d-f" x="276" y="349">every grant, every call</text><rect class="d-node" x="560" y="62" width="300" height="150" rx="11"/><text class="d-k" x="584" y="94">ANY TOOL ENGINEERING USES</text><text class="d-t" x="584" y="124">Repos · Cloud · Databases</text><text class="d-f" x="584" y="150">Internal APIs · CI · Secret stores</text><text class="d-ka" x="584" y="180">tool-agnostic by design</text><rect class="d-node-w" x="560" y="262" width="300" height="112" rx="11"/><text class="d-kw" x="584" y="294">DESTRUCTIVE OP</text><text class="d-tw" x="584" y="324">Human approval gate</text><text class="d-f" x="584" y="350">drop table · delete bucket · rotate prod</text><path class="d-l" d="M172 222 H 240" marker-end="url(#ah)"/><path class="d-la" d="M490 138 H 560" marker-end="url(#aha)"/><path class="d-lw" d="M490 318 H 560" marker-end="url(#ahw)"/><text class="d-ka" x="525" y="124" text-anchor="middle">grant</text><text class="d-kw" x="525" y="304" text-anchor="middle">stop</text><text class="d-f" x="240" y="408">Boundaries are configured by the customer — not assumed by us.</text>
+        </svg>
+      </div>
+      <figcaption><b>Broker, not a credential store.</b> Four attributes govern every grant — scope, time-limit, guardrails, audit — and anything destructive branches out of the automated path entirely and waits for a person.</figcaption>
+    </figure>
+
+    <section>
+      <h2 class="lp-sh" style="margin:44px 0 0">Key capabilities</h2>
+      <ul class="caps">
+        <li><b>Least-privilege per task</b> — the grant is shaped by the work, not by the role.</li>
+        <li><b>Ephemeral, just-in-time grants</b> — nothing standing, nothing to leak later.</li>
+        <li><b>Destructive-op approval</b> — a human decides, every time, with context.</li>
+        <li><b>Environment segregation</b> — what is reachable from dev is not reachable from prod.</li>
+        <li><b>Full audit</b> — every grant, every call, every denial, replayable.</li>
+        <li><b>Customer-defined boundaries</b> — configured by the people who own the blast radius.</li>
+      </ul>
+    </section>
+
+    <p class="lp-hi"><b>This is the hardest and highest-stakes pillar, so it is deliberately last.</b> Getting it wrong is worse than not having it. It gets built after the isolation and audit foundations it depends on are proven — not before.</p>
+
+    <div class="lp-cta">
+      <p>The measurement this lens reads from is running today. Go see it decide something.</p>
+      <a class="btn btn-lg" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Try the live demo →</a>
+    </div>
+
+    <nav class="lp-nav">
+      <a href="../index.html#vision">← All six lenses</a>
+      <a class="nx" href="brain.html">Next · Compounding memory →</a>
+    </nav>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-l">
+      <a class="brand" href="../index.html"><span class="logo">F</span>
+        <span class="brand-t"><b>Fieldcraft</b><i>CONTROL ROOM</i></span></a>
+      <p>Measure how effectively people work with AI. Govern what agents may touch.</p>
+    </div>
+    <div class="foot-r">
+      <a class="icn" href="https://github.com/Shreyash-prog/Fieldcraft/tree/main" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+      <a class="icn" href="https://www.linkedin.com/in/shreyash-k-a89823174/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M3.6 5.3H.9V15h2.7V5.3ZM2.25 1A1.55 1.55 0 1 0 2.25 4.1 1.55 1.55 0 0 0 2.25 1ZM15 9.5c0-2.6-1.4-3.8-3.25-3.8-1.5 0-2.17.82-2.54 1.4V5.3H6.5c.04.76 0 9.7 0 9.7h2.71V9.6c0-.24.02-.49.09-.66.19-.49.63-1 1.38-1 .97 0 1.36.74 1.36 1.83V15H15V9.5Z"/></svg></a>
+    </div>
+  </div>
+  <div class="wrap foot-b"><span>Built by Shreyash Kalal</span><span>Measure · Govern</span></div>
+</footer>
+
+<script src="../main.js"></script>
+</body></html>

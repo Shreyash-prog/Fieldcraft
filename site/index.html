@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fieldcraft — Measure how effectively people work with AI</title>
+<meta name="description" content="AI made every engineer faster. Fieldcraft measures whether they got better — steering quality, iterations, cost and outcome — for forward-deployed engineers, AI engineers, and anyone shipping AI-assisted work.">
+<meta property="og:title" content="Fieldcraft — Measure how effectively people work with AI">
+<meta property="og:description" content="Not just how fast. Same task, three ways: the quality of the steering is the whole variable — and it is measured, with a judge calibrated to kappa 0.886.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!-- Reveal animations only exist when JS is here to end them. Without this the
+     page would render blank for anyone whose JS is blocked or slow. -->
+<script>document.documentElement.classList.add('js')</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%2314e0b0'/><text x='16' y='23' font-size='19' font-weight='700' font-family='sans-serif' text-anchor='middle' fill='%2303130f'>F</text></svg>">
+</head>
+<body>
+
+<!-- ══ NAV ══ -->
+<header class="nav" id="nav">
+  <a class="brand" href="#top">
+    <span class="logo">F</span>
+    <span class="brand-t"><b>Fieldcraft</b><i>CONTROL ROOM</i></span>
+  </a>
+  <nav class="nav-links">
+    <a href="#proof">Proof</a>
+    <a href="#product">Product</a>
+    <a href="#vision">Vision</a>
+    <a href="#status">Status</a>
+  </nav>
+  <div class="nav-right">
+    <a class="icn" href="https://github.com/Shreyash-prog/Fieldcraft/tree/main" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+    </a>
+    <a class="icn" href="https://www.linkedin.com/in/shreyash-k-a89823174/" target="_blank" rel="noopener" aria-label="LinkedIn">
+      <svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M3.6 5.3H.9V15h2.7V5.3ZM2.25 1A1.55 1.55 0 1 0 2.25 4.1 1.55 1.55 0 0 0 2.25 1ZM15 9.5c0-2.6-1.4-3.8-3.25-3.8-1.5 0-2.17.82-2.54 1.4V5.3H6.5c.04.76 0 9.7 0 9.7h2.71V9.6c0-.24.02-.49.09-.66.19-.49.63-1 1.38-1 .97 0 1.36.74 1.36 1.83V15H15V9.5Z"/></svg>
+    </a>
+    <a class="btn btn-sm" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Live demo</a>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span>
+    </button>
+  </div>
+</header>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#proof">Proof</a><a href="#product">Product</a>
+  <a href="#vision">Vision</a><a href="#status">Status</a><a href="#try">Try it</a>
+</div>
+
+<!-- ══ HERO ══ -->
+<section class="hero" id="top">
+  <div class="hero-grid" aria-hidden="true"></div>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap hero-in">
+    <div class="eyebrow reveal"><span class="dot"></span>AI effectiveness<span class="eb-more"> &nbsp;·&nbsp; measured, not asserted</span></div>
+    <h1 class="reveal d1">Measure how effectively<br>people work with AI.<br><em>Not just how fast.</em></h1>
+    <p class="lede reveal d2">AI made every engineer faster. It did not make them <b>better</b> — and
+       nothing in your stack can tell the two apart. Fieldcraft measures the difference on real
+       work: for <b>forward-deployed engineers</b>, <b>AI engineers</b>, and anyone shipping
+       AI-assisted code.</p>
+    <div class="cta-row reveal d3">
+      <a class="btn btn-lg" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Try the live demo →</a>
+      <a class="btn btn-ghost btn-lg" href="#proof">See how it works</a>
+    </div>
+  </div>
+  <div class="wrap hero-shot-wrap reveal d4">
+    <figure class="shot shot-hero">
+      <div class="chrome"><i></i><i></i><i></i><span>fieldcraft · three-mode comparison</span></div>
+      <div class="scroller"><img src="assets/comparison.webp" alt="Fieldcraft's three-mode comparison: the same task run three ways, with iterations, effectiveness, cost and operator quality side by side" width="2912" height="1200" loading="eager" fetchpriority="high" decoding="async"></div>
+    </figure>
+  </div>
+</section>
+
+<!-- ══ PROOF ══
+     The broad claim above is only worth anything if it is already measurable.
+     Every number in this section comes from runs the demo will reproduce. -->
+<section class="sec sec-proof" id="proof">
+  <div class="wrap">
+    <p class="kicker reveal">Proof, not positioning</p>
+    <h2 class="reveal">This is already measured.<br>Here is <em>the measurement</em>.</h2>
+    <p class="sec-lede reveal d1">One task. One agent. Three different ways of working with it.
+       Fieldcraft runs all three and scores what came out — so the gap between them stops being
+       an opinion and becomes a number.</p>
+
+    <div class="modes reveal d2">
+      <article class="mode">
+        <p class="mode-h">1 · reviews only</p>
+        <p class="mode-d">A human reviews every turn and approves — adding no information.</p>
+        <dl class="mstat">
+          <div><dt>Iterations</dt><dd>2</dd></div>
+          <div><dt>Cost</dt><dd>$0.16</dd></div>
+          <div><dt>Outcome</dt><dd>1.0</dd></div>
+        </dl>
+      </article>
+      <article class="mode mode-win">
+        <p class="mode-h">2 · reviews + comments <span class="pill">best</span></p>
+        <p class="mode-d">The same human, steering — they name the catch the first attempt missed.</p>
+        <dl class="mstat">
+          <div><dt>Iterations</dt><dd class="hi">1</dd></div>
+          <div><dt>Cost</dt><dd class="hi">$0.08</dd></div>
+          <div><dt>Outcome</dt><dd>1.0</dd></div>
+        </dl>
+      </article>
+      <article class="mode">
+        <p class="mode-h">3 · autonomous</p>
+        <p class="mode-d">No human at all. The loop reviews itself until the criteria are met.</p>
+        <dl class="mstat">
+          <div><dt>Iterations</dt><dd>2</dd></div>
+          <div><dt>Cost</dt><dd>$0.16</dd></div>
+          <div><dt>Outcome</dt><dd>1.0</dd></div>
+        </dl>
+      </article>
+    </div>
+
+    <div class="finding reveal d2">
+      <p><b>The quality of the steering is the whole variable.</b> A reviewer who only approves is
+         worth exactly a reviewer who isn't there — modes 1 and 3 come out <i>identical</i>. The
+         reviewer who actually knew the catch reached the same result in half the attempts for
+         half the money.</p>
+      <p class="micro">That is what <b>"effectively"</b> means here, and it is four concrete
+         measurements: iterations to a correct result, cost to get there, the quality of the
+         outcome, and the quality of the human's steering. Same task, same agent, honest
+         comparison.</p>
+    </div>
+
+    <div class="kappa reveal d2">
+      <div class="kappa-l">
+        <div class="hero-proof">
+          <div class="pf"><b>κ = 0.886</b><i>mean Cohen's kappa, 5 live runs</i></div>
+          <div class="pf-sep" aria-hidden="true"></div>
+          <div class="pf"><b>94.5%</b><i>judge–human agreement</i></div>
+          <div class="pf-sep" aria-hidden="true"></div>
+          <div class="pf"><b>0</b><i>false "met" verdicts</i></div>
+        </div>
+      </div>
+      <p class="kappa-r">The score behind those numbers is not an LLM's opinion. The judge was
+         calibrated against hand-labelled ground truth — 152 forced-tool-use judgments per run —
+         and its bias was characterised and published. All 42 disagreements ran the same
+         direction: the judge under-reporting, never inflating.
+         <a href="https://github.com/Shreyash-prog/Fieldcraft/blob/main/docs/CALIBRATION.md" target="_blank" rel="noopener">Method and limits →</a></p>
+    </div>
+
+    <div class="proof-cta reveal d2">
+      <a class="btn" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Run this comparison yourself →</a>
+      <span>Same task, same three modes, same numbers — it's deterministic.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══ WHO ══ -->
+<section class="sec sec-who" id="who">
+  <div class="wrap">
+    <p class="kicker reveal">Who it's for</p>
+    <h2 class="reveal">The people whose job<br>AI actually changed.</h2>
+    <div class="who-grid">
+      <article class="who reveal">
+        <p class="who-k">Forward-deployed</p>
+        <h3>The engineer in the room</h3>
+        <p>You ship fast, in front of a customer, mostly alone. Nothing today shows your manager
+           that what you shipped was good — or that you drove the AI well getting there.</p>
+      </article>
+      <article class="who reveal d1">
+        <p class="who-k">AI engineer</p>
+        <h3>The person building with agents</h3>
+        <p>Your output is a loop, not a diff. Effectiveness is how few turns it took, what it
+           cost, and whether the result held — none of which a commit log records.</p>
+      </article>
+      <article class="who reveal d2">
+        <p class="who-k">Everyone else</p>
+        <h3>Any developer shipping AI-assisted work</h3>
+        <p>Which is now almost everyone. The same measurement applies the moment a model wrote
+           part of what you're about to merge.</p>
+      </article>
+    </div>
+
+    <div class="ladder reveal d1">
+      <div class="rung rung-on">
+        <span class="rung-k">Today</span>
+        <b>Individual</b>
+        <p>One run, one person's steering, scored and evidenced.</p>
+      </div>
+      <div class="rung-arrow" aria-hidden="true"></div>
+      <div class="rung">
+        <span class="rung-k">Next</span>
+        <b>Team</b>
+        <p>The same records aggregated to a sprint: trustworthy "done", visible rework.</p>
+      </div>
+      <div class="rung-arrow" aria-hidden="true"></div>
+      <div class="rung">
+        <span class="rung-k">Then</span>
+        <b>Organisation</b>
+        <p>Six lenses on one substrate — delivery, assurance, provenance, access, memory.</p>
+      </div>
+    </div>
+    <p class="ladder-note reveal d1"><b>Straight about the ladder:</b> the individual rung is built
+       and demoable today. Team and organisation are what the substrate was designed to carry —
+       they are the roadmap below, not a shipped feature. <a href="#vision">See the six lenses ↓</a></p>
+  </div>
+</section>
+
+<!-- ══ PROBLEM ══ -->
+<section class="sec" id="problem">
+  <div class="wrap">
+    <p class="kicker reveal">The problem</p>
+    <h2 class="reveal">Every signal you used to trust<br>quietly stopped working.</h2>
+    <div class="prob-grid">
+      <article class="prob reveal">
+        <span class="pn">01</span>
+        <h3>"Done" stopped meaning done</h3>
+        <p>An agent reports success on work that only looks finished. The claim comes from the
+           thing being evaluated — the one source you can't use as evidence.</p>
+      </article>
+      <article class="prob reveal d1">
+        <span class="pn">02</span>
+        <h3>Passing tests aren't enough</h3>
+        <p>A green suite says the code runs. It says nothing about whether a credential was
+           committed, a protected file was edited, or a corner was cut to get there.</p>
+      </article>
+      <article class="prob reveal d2">
+        <span class="pn">03</span>
+        <h3>You can't see how it was built</h3>
+        <p>Two engineers ship the same feature. One took four attempts and burned budget;
+           the other took one. Nothing in your tooling can tell them apart.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ══ PRODUCT ══ -->
+<section class="sec" id="product">
+  <div class="wrap">
+    <p class="kicker reveal">What it does</p>
+    <h2 class="reveal">Run the work. Score the work.<br>Fence what the agent may touch.</h2>
+
+    <!-- centrepiece -->
+    <div class="feat feat-lead reveal">
+      <div class="feat-txt">
+        <p class="tag tag-measure">Measure</p>
+        <h3>The same task, three ways.<br>The result is not what people expect.</h3>
+        <p>Run one task with a reviewer who only approves, with a reviewer who actually knows
+           the catch, and with no human at all.</p>
+        <ul class="finds">
+          <li><b>A rubber-stamp reviewer adds nothing.</b> Modes 1 and 3 come out identical —
+              a human who contributes no information is worth exactly a human who isn't there.</li>
+          <li><b>Steering is what moves the needle</b> — and it moves <i>cost</i>, not outcome.
+              All three reach the same effectiveness; the informed run gets there in half the
+              attempts for half the money.</li>
+        </ul>
+      </div>
+      <figure class="shot">
+        <div class="chrome"><i></i><i></i><i></i><span>three-mode comparison</span></div>
+        <div class="scroller"><img src="assets/comparison.webp" alt="Three-mode comparison result: 2 iterations / $0.16 for reviews-only, 1 iteration / $0.08 for reviews-plus-comments, 2 iterations / $0.16 for autonomous, all reaching effectiveness 1.0" loading="lazy" decoding="async" width="2912" height="1200"></div>
+      </figure>
+    </div>
+
+    <div class="feat feat-alt reveal">
+      <div class="feat-txt">
+        <p class="tag">Board</p>
+        <h3>Work is a ticket, not a prompt</h3>
+        <p>Connect a repository, attach the spec, set the rules, and run it — with you as the
+           reviewer, or without. Every run stays attached to the work it belongs to.</p>
+      </div>
+      <figure class="shot">
+        <div class="chrome"><i></i><i></i><i></i><span>board</span></div>
+        <div class="scroller"><img src="assets/board.webp" alt="Fieldcraft board: tickets across backlog, in progress, review and done columns" loading="lazy" decoding="async" width="2912" height="1040"></div>
+      </figure>
+    </div>
+
+    <div class="feat reveal">
+      <div class="feat-txt">
+        <p class="tag tag-govern">Govern</p>
+        <h3>The gate catches what tests can't</h3>
+        <p>Set the rules on a ticket: files the agent may not edit, and what it may never add —
+           secrets, dynamic execution, network calls. Every change is checked. Violations are
+           reverted and recorded before they can land.</p>
+        <p class="micro">In the demo: a naive attempt passes <b>every test</b> and still ships a
+           hardcoded key. The gate reverts it; the run comes back with the safe version.</p>
+      </div>
+      <figure class="shot">
+        <div class="chrome"><i></i><i></i><i></i><span>governance gate</span></div>
+        <div class="scroller"><img src="assets/governance.webp" alt="The governance gate catching a hardcoded credential in two of three runs and reverting the change" loading="lazy" decoding="async" width="2912" height="1280"></div>
+      </figure>
+    </div>
+
+    <div class="feat feat-alt reveal">
+      <div class="feat-txt">
+        <p class="tag">Try it</p>
+        <h3>Five tasks, each with a catch</h3>
+        <p>Curated reference tasks where a first attempt misses something real — an idempotence
+           bug, a second phone format, a credential in the source. Run one and watch what
+           changes when the reviewer already knows.</p>
+      </div>
+      <figure class="shot">
+        <div class="chrome"><i></i><i></i><i></i><span>try it</span></div>
+        <div class="scroller"><img src="assets/tryit.webp" alt="The Try it playground: five curated tasks each showing its goal and its catch" loading="lazy" decoding="async" width="2912" height="1320"></div>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ══ VISION ══ -->
+<section class="sec sec-vision" id="vision">
+  <div class="vision-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="kicker reveal">The vision</p>
+    <h2 class="reveal">One engine.<br>Six ways to look at it.</h2>
+    <p class="sec-lede reveal d1">Measurement and governance are one substrate. Point different
+       lenses at the same runtime and it answers a different question for a different person —
+       without collecting the data twice.</p>
+
+    <div class="halves reveal d2">
+      <div class="half h-measure"><span>Measure</span><p>Was the work good, what did it cost, and how well was it driven?</p></div>
+      <div class="half h-govern"><span>Govern</span><p>What may the agent touch, under whose authority, with what evidence?</p></div>
+    </div>
+
+    <div class="lens-grid">
+      <a class="lens reveal" href="lens/fde.html">
+        <p class="lens-role">Forward-deployed engineer</p>
+        <h3>Did I actually deliver?</h3>
+        <p>Individual accountability: a preventive gate that won&#39;t let weak work ship, and a retrospective scorecard for how well you drove the AI.</p>
+        <span class="lens-go">Explore this lens <em>&#8594;</em></span>
+      </a>
+      <a class="lens reveal d1" href="lens/pm.html">
+        <p class="lens-role">PM &amp; delivery lead</p>
+        <h3>Can I trust what &quot;done&quot; means?</h3>
+        <p>Team delivery truth: quality-adjusted velocity, visible rework, and estimation re-baselined for a world where AI closes ten tickets a day.</p>
+        <span class="lens-go">Explore this lens <em>&#8594;</em></span>
+      </a>
+      <a class="lens reveal d2" href="lens/qa.html">
+        <p class="lens-role">QA</p>
+        <h3>Where do I look first?</h3>
+        <p>Targeted assurance: risk-based routing that points scarce review attention at the 10% that deserves it — and turns findings into gate checks.</p>
+        <span class="lens-go">Explore this lens <em>&#8594;</em></span>
+      </a>
+      <a class="lens reveal" href="lens/ops.html">
+        <p class="lens-role">Platform &amp; ops</p>
+        <h3>How did the AI build this?</h3>
+        <p>Production provenance: trace a 3am incident back to how the agent built the thing that broke, then harden the standard with what production proved.</p>
+        <span class="lens-go">Explore this lens <em>&#8594;</em></span>
+      </a>
+      <a class="lens reveal d1" href="lens/access.html">
+        <p class="lens-role">Agent access control</p>
+        <h3>What may it reach?</h3>
+        <p>A least-privilege control plane: scoped, ephemeral, just-in-time access to any tool, with destructive operations gated on a human and everything audited.</p>
+        <span class="lens-go">Explore this lens <em>&#8594;</em></span>
+      </a>
+      <a class="lens reveal d2" href="lens/brain.html">
+        <p class="lens-role">Team brain</p>
+        <h3>Has someone solved this before?</h3>
+        <p>Compounding memory: a retrieval layer over every recorded run, so a trap one person hit becomes context the next person starts with.</p>
+        <span class="lens-go">Explore this lens <em>&#8594;</em></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ══ STATUS ══ -->
+<section class="sec" id="status">
+  <div class="wrap">
+    <p class="kicker reveal">Where it stands</p>
+    <h2 class="reveal">The hard parts are built.<br>The big parts are next.</h2>
+
+    <div class="status-grid">
+      <div class="col col-built reveal">
+        <div class="col-head">
+          <span class="col-tag">Built &amp; proven</span>
+          <p>Each of these was the hard problem in its own right.</p>
+        </div>
+
+        <div class="hero-stat">
+          <b>κ = 0.886</b>
+          <p>Mean Cohen's kappa across 5 live runs (range 0.856–0.916), <b>94.5% agreement</b>
+             over 152 forced-tool-use judgments per run. Every one of the 42 disagreements ran
+             the same direction — the judge under-reporting, never inflating.
+             <a href="https://github.com/Shreyash-prog/Fieldcraft/blob/main/docs/CALIBRATION.md" target="_blank" rel="noopener">Method and limits →</a></p>
+        </div>
+
+        <ul class="built">
+          <li><b>A calibrated judge.</b> Not "an LLM grades it" — a judge measured against
+              hand-labelled ground truth, with its bias characterised and published.</li>
+          <li><b>A governed run loop.</b> Develop → verify → iterate, with a real human review
+              turn, streamed live and durable across restarts.</li>
+          <li><b>A per-ticket governance gate.</b> Policy enforced on every turn; violations
+              reverted and logged before they land.</li>
+          <li><b>Durable spend caps.</b> Enforced transactionally across <i>every</i> run path —
+              one shared chokepoint, so no path can drift out of enforcement.</li>
+          <li><b>Hardened execution.</b> Credential-free environment, resource limits,
+              process-group kill, argv-only — and honest about what it isn't.</li>
+          <li><b>Gated multi-user access.</b> Invite-only, per-tenant isolation, immediate
+              revocation.</li>
+        </ul>
+      </div>
+
+      <div class="col col-next reveal d1">
+        <div class="col-head">
+          <span class="col-tag tag-next">The frontier</span>
+          <p>What the foundation was built to carry.</p>
+        </div>
+        <ol class="next">
+          <li>
+            <span class="step">Next</span>
+            <h4>Live agents on real repositories</h4>
+            <p>Real model, real branch, real PR — behind per-run isolation so a stranger's
+               test suite can't reach anything it shouldn't.</p>
+          </li>
+          <li>
+            <span class="step">Then</span>
+            <h4>The agent access-control plane</h4>
+            <p>Scoped, customer-configured credentials for cloud and databases. No standing
+               access; destructive operations approved by a human.</p>
+          </li>
+          <li>
+            <span class="step">Then</span>
+            <h4>The full six-lens platform</h4>
+            <p>One substrate, six audiences — each getting the answer they need from data
+               collected once.</p>
+          </li>
+          <li>
+            <span class="step">Then</span>
+            <h4>Team memory that compounds</h4>
+            <p>Retrieval over what previous runs learned, so the codebase's hard-won context
+               is the default starting point.</p>
+          </li>
+        </ol>
+        <p class="frontier-note">Built in the open, in order of what has to be true first —
+           isolation before live agents, credentials before connections.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ TRY ══ -->
+<section class="sec sec-try" id="try">
+  <div class="wrap">
+    <div class="try-card reveal">
+      <p class="kicker">Try it</p>
+      <h2>See it decide something<br>in about a minute.</h2>
+      <ol class="steps">
+        <li><span>1</span><b>Open the demo</b><i>It's invite-gated — no open sign-up.</i></li>
+        <li><span>2</span><b>Request a code</b><i>On the gate screen. Approved by hand.</i></li>
+        <li><span>3</span><b>Run a comparison</b><i>Try it → pick a task → three ways.</i></li>
+      </ol>
+      <a class="btn btn-lg" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Open the live demo →</a>
+      <p class="disclose"><b>What you're getting:</b> a public demo exposing a curated,
+         deterministic slice of Fieldcraft for evaluation — not the full product in development.
+         It runs on scripted reference tasks, so everyone sees the same result.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FOOTER ══ -->
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-l">
+      <a class="brand" href="#top"><span class="logo">F</span>
+        <span class="brand-t"><b>Fieldcraft</b><i>CONTROL ROOM</i></span></a>
+      <p>Measure how well AI-assisted work was done. Govern what agents may touch.</p>
+    </div>
+    <div class="foot-r">
+      <a class="icn" href="https://github.com/Shreyash-prog/Fieldcraft/tree/main" target="_blank" rel="noopener" aria-label="GitHub">
+        <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+      <a class="icn" href="https://www.linkedin.com/in/shreyash-k-a89823174/" target="_blank" rel="noopener" aria-label="LinkedIn">
+        <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3.6 5.3H.9V15h2.7V5.3ZM2.25 1A1.55 1.55 0 1 0 2.25 4.1 1.55 1.55 0 0 0 2.25 1ZM15 9.5c0-2.6-1.4-3.8-3.25-3.8-1.5 0-2.17.82-2.54 1.4V5.3H6.5c.04.76 0 9.7 0 9.7h2.71V9.6c0-.24.02-.49.09-.66.19-.49.63-1 1.38-1 .97 0 1.36.74 1.36 1.83V15H15V9.5Z"/></svg>
+      </a>
+    </div>
+  </div>
+  <div class="wrap foot-b"><span>Built by Shreyash Kalal</span><span>Measure · Govern</span></div>
+</footer>
+
+<script src="main.js"></script>
+</body></html>

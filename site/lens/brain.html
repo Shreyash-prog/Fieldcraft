@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compounding memory — Fieldcraft</title>
+<meta name="description" content="“Has someone already solved this?” Every run Fieldcraft records is retrievable. A retrieval layer over that history surfaces “someone solved this before” at the moment of work, not">
+<meta property="og:title" content="Compounding memory — Fieldcraft">
+<meta property="og:description" content="“Has someone already solved this?” Every run Fieldcraft records is retrievable. A retrieval layer over that history surfaces “someone solved this before” at the moment of work, not">
+<meta property="og:type" content="article">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add('js')</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%2314e0b0'/><text x='16' y='23' font-size='19' font-weight='700' font-family='sans-serif' text-anchor='middle' fill='%2303130f'>F</text></svg>">
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <a class="brand" href="../index.html">
+    <span class="logo">F</span>
+    <span class="brand-t"><b>Fieldcraft</b><i>CONTROL ROOM</i></span>
+  </a>
+  <nav class="nav-links">
+    <a href="../index.html#proof">Proof</a>
+    <a href="../index.html#product">Product</a>
+    <a href="../index.html#vision">Vision</a>
+    <a href="../index.html#status">Status</a>
+  </nav>
+  <div class="nav-right">
+    <a class="icn" href="https://github.com/Shreyash-prog/Fieldcraft/tree/main" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+    <a class="icn" href="https://www.linkedin.com/in/shreyash-k-a89823174/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M3.6 5.3H.9V15h2.7V5.3ZM2.25 1A1.55 1.55 0 1 0 2.25 4.1 1.55 1.55 0 0 0 2.25 1ZM15 9.5c0-2.6-1.4-3.8-3.25-3.8-1.5 0-2.17.82-2.54 1.4V5.3H6.5c.04.76 0 9.7 0 9.7h2.71V9.6c0-.24.02-.49.09-.66.19-.49.63-1 1.38-1 .97 0 1.36.74 1.36 1.83V15H15V9.5Z"/></svg></a>
+    <a class="btn btn-sm" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Live demo</a>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span>
+    </button>
+  </div>
+</header>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="../index.html#proof">Proof</a><a href="../index.html#product">Product</a>
+  <a href="../index.html#vision">Vision</a><a href="../index.html#status">Status</a>
+  <a href="../index.html#try">Try it</a>
+</div>
+
+<main class="lp">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <a class="backlink" href="../index.html#vision">← All six lenses</a>
+    <span class="lp-half is-cross">Cross-cutting · Lens 06</span>
+    <p class="lp-role">Team brain</p>
+    <h1>Compounding memory</h1>
+    <p class="lp-q">“Has someone already solved this?”</p>
+
+    <div class="lp-cols">
+      <section class="lp-block">
+        <h2 class="lp-sh">The problem</h2>
+        <p>The same problem gets re-solved by people who never knew it was solved. The same trap gets hit by the fourth person to touch the file. Someone leaves and their hard-won context leaves with them. Experience evaporates instead of accumulating — and AI makes this worse, because it produces more work for the same amount of shared memory.</p>
+      </section>
+      <section class="lp-block is-do">
+        <h2 class="lp-sh">What Fieldcraft does</h2>
+        <p>Every run Fieldcraft records is retrievable. A retrieval layer over that history surfaces <b>“someone solved this before”</b> at the moment of work, not in a wiki nobody opens: similar-problem recommendations, memory of traps this repo has sprung before, and QA→DEV foresight about what tends to break next. Visibility is a first-class control.</p>
+      </section>
+    </div>
+
+    <figure class="dia">
+      <div class="dia-head">Compounding memory</div>
+      <div class="dia-scroll">
+        <svg viewBox="0 0 880 470" role="img" aria-labelledby="dt-brain">
+          <title id="dt-brain">Compounding memory — diagram</title>
+          <defs>
+      <marker id="ah" viewBox="0 0 9 9" refX="7.6" refY="4.5" markerWidth="6.4" markerHeight="6.4" orient="auto-start-reverse">
+        <path d="M0.8 1 L7.4 4.5 L0.8 8" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+      <marker id="aha" viewBox="0 0 9 9" refX="7.6" refY="4.5" markerWidth="6.4" markerHeight="6.4" orient="auto-start-reverse">
+        <path d="M0.8 1 L7.4 4.5 L0.8 8" fill="none" stroke="#14e0b0" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+      <marker id="ahw" viewBox="0 0 9 9" refX="7.6" refY="4.5" markerWidth="6.4" markerHeight="6.4" orient="auto-start-reverse">
+        <path d="M0.8 1 L7.4 4.5 L0.8 8" fill="none" stroke="#f2b544" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+          <text class="d-k" x="16" y="40">EVERY RECORDED RUN</text><rect class="d-node" x="16" y="58" width="214" height="44" rx="9"/><circle cx="38" cy="80" r="3" fill="#14e0b0"/><text class="d-f" x="54" y="85">a trap someone already hit</text><path class="d-l" d="M230 80 C 248 80 248 166 264 166" marker-end="url(#ah)"/><rect class="d-node" x="16" y="112" width="214" height="44" rx="9"/><circle cx="38" cy="134" r="3" fill="#14e0b0"/><text class="d-f" x="54" y="139">a convention this repo wants</text><path class="d-l" d="M230 134 C 248 134 248 166 264 166" marker-end="url(#ah)"/><rect class="d-node" x="16" y="166" width="214" height="44" rx="9"/><circle cx="38" cy="188" r="3" fill="#14e0b0"/><text class="d-f" x="54" y="193">a fix that actually worked</text><path class="d-l" d="M230 188 C 248 188 248 166 264 166" marker-end="url(#ah)"/><rect class="d-node-q" x="16" y="220" width="214" height="44" rx="9"/><circle cx="38" cy="242" r="3" fill="rgba(255,255,255,.22)"/><text class="d-f" x="54" y="247">and everything after</text><path class="d-l" d="M230 242 C 248 242 248 166 264 166" marker-end="url(#ah)"/><rect class="d-node-a" x="264" y="96" width="182" height="140" rx="11"/><text class="d-ka" x="288" y="128">RETRIEVAL LAYER</text><text class="d-t" x="288" y="158">Similarity over</text><text class="d-t" x="288" y="180">every run ever</text><text class="d-f" x="288" y="208">not a wiki nobody</text><text class="d-f" x="288" y="226">opens</text><path class="d-la" d="M446 166 H 510" marker-end="url(#aha)"/><rect class="d-node-a" x="510" y="58" width="350" height="216" rx="11"/><text class="d-ka" x="534" y="90">AT THE MOMENT OF WORK</text><rect class="d-node" x="532" y="110" width="306" height="44" rx="8"/><circle cx="556" cy="132" r="3" fill="#14e0b0"/><text class="d-s" x="574" y="137">Someone solved this before — here</text><rect class="d-node" x="532" y="162" width="306" height="44" rx="8"/><circle cx="556" cy="184" r="3" fill="#14e0b0"/><text class="d-s" x="574" y="189">This file has bitten three people</text><rect class="d-node" x="532" y="214" width="306" height="44" rx="8"/><circle cx="556" cy="236" r="3" fill="#14e0b0"/><text class="d-s" x="574" y="241">QA→DEV foresight: what breaks next</text><rect class="d-node-q" x="16" y="318" width="844" height="134" rx="11"/><text class="d-k" x="40" y="350">VISIBILITY IS FIRST-CLASS</text><rect class="d-node-a" x="40" y="366" width="232" height="66" rx="9"/><text class="d-t" x="60" y="396">Within a team</text><text class="d-ka" x="60" y="418">FULL</text><rect class="d-node-w" x="322" y="366" width="232" height="66" rx="9"/><text class="d-t" x="342" y="396">Between teams</text><text class="d-kw" x="342" y="418">CONTROLLED</text><rect class="d-node" x="604" y="366" width="232" height="66" rx="9"/><text class="d-t" x="624" y="396">Across customers</text><text class="d-k" x="624" y="418">HARD BOUNDARY</text>
+        </svg>
+      </div>
+      <figcaption><b>Retrieval, plus a visibility model.</b> What compounds is bounded on purpose: full within a team, controlled between teams, and a hard boundary across customers. The last one is not a setting.</figcaption>
+    </figure>
+
+    <section>
+      <h2 class="lp-sh" style="margin:44px 0 0">Key capabilities</h2>
+      <ul class="caps">
+        <li><b>Similar-problem recommendation</b> — surfaced while you work, not after.</li>
+        <li><b>Cross-repo pattern matching</b> — the same shape of bug, wherever it lives.</li>
+        <li><b>Trap memory</b> — what this file, this API, this migration did to the last person.</li>
+        <li><b>QA→DEV foresight</b> — what QA keeps finding, fed forward before it is written.</li>
+        <li><b>Ramp acceleration</b> — a new joiner starts with the team's accumulated context.</li>
+      </ul>
+    </section>
+
+    <p class="lp-hi"><b>Experience compounds instead of evaporating.</b> Every other lens makes one run better. This one makes every future run start further along — which is the only thing on this page that gets more valuable purely by waiting.</p>
+
+    <div class="lp-cta">
+      <p>The measurement this lens reads from is running today. Go see it decide something.</p>
+      <a class="btn btn-lg" href="https://fieldcraft-shreyash.fly.dev" target="_blank" rel="noopener">Try the live demo →</a>
+    </div>
+
+    <nav class="lp-nav">
+      <a href="../index.html#vision">← All six lenses</a>
+      <a class="nx" href="fde.html">Next · Individual accountability →</a>
+    </nav>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-l">
+      <a class="brand" href="../index.html"><span class="logo">F</span>
+        <span class="brand-t"><b>Fieldcraft</b><i>CONTROL ROOM</i></span></a>
+      <p>Measure how effectively people work with AI. Govern what agents may touch.</p>
+    </div>
+    <div class="foot-r">
+      <a class="icn" href="https://github.com/Shreyash-prog/Fieldcraft/tree/main" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+      <a class="icn" href="https://www.linkedin.com/in/shreyash-k-a89823174/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M3.6 5.3H.9V15h2.7V5.3ZM2.25 1A1.55 1.55 0 1 0 2.25 4.1 1.55 1.55 0 0 0 2.25 1ZM15 9.5c0-2.6-1.4-3.8-3.25-3.8-1.5 0-2.17.82-2.54 1.4V5.3H6.5c.04.76 0 9.7 0 9.7h2.71V9.6c0-.24.02-.49.09-.66.19-.49.63-1 1.38-1 .97 0 1.36.74 1.36 1.83V15H15V9.5Z"/></svg></a>
+    </div>
+  </div>
+  <div class="wrap foot-b"><span>Built by Shreyash Kalal</span><span>Measure · Govern</span></div>
+</footer>
+
+<script src="../main.js"></script>
+</body></html>
